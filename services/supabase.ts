@@ -4,20 +4,78 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 
-// Verifica se a URL é válida e não é o placeholder padrão
+// Verifica se a URL é válida
 const isConfigured = 
   supabaseUrl && 
   supabaseUrl.startsWith('https://') && 
   !supabaseUrl.includes('placeholder-project');
 
-let client = null;
-if (isConfigured) {
-  try {
-    client = createClient(supabaseUrl, supabaseAnonKey);
-  } catch (e) {
-    console.warn("Falha ao inicializar Supabase:", e);
-  }
-}
+export const supabase = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-export const supabase = client;
-export const isSupabaseReady = () => !!client;
+export const isSupabaseReady = () => !!supabase;
+
+/**
+ * Funções Genéricas de Acesso a Dados
+ */
+export const db = {
+  // Configurações do Site
+  async getConfig() {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('site_config').select('*').single();
+    if (error) return null;
+    return data;
+  },
+  async updateConfig(config: any) {
+    if (!supabase) return;
+    const { error } = await supabase.from('site_config').upsert({ id: 1, ...config });
+    if (error) console.error("Erro ao salvar config no Supabase:", error);
+  },
+
+  // Usuários / Perfis
+  async getUsers() {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('profiles').select('*');
+    return error ? [] : data;
+  },
+  async updateUser(user: any) {
+    if (!supabase) return;
+    await supabase.from('profiles').upsert(user);
+  },
+  async findUserByEmail(email: string) {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('profiles').select('*').eq('email', email).single();
+    return error ? null : data;
+  },
+
+  // Posts / Anúncios
+  async getPosts() {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+    return error ? [] : data;
+  },
+  async addPost(post: any) {
+    if (!supabase) return;
+    await supabase.from('posts').insert(post);
+  },
+  async updatePost(post: any) {
+    if (!supabase) return;
+    await supabase.from('posts').update(post).eq('id', post.id);
+  },
+  async deletePost(id: string) {
+    if (!supabase) return;
+    await supabase.from('posts').delete().eq('id', id);
+  },
+
+  // Categorias
+  async getCategories() {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('categories').select('name');
+    return error ? null : data.map(c => c.name);
+  },
+  async saveCategories(categories: string[]) {
+    if (!supabase) return;
+    // Remove antigas e insere novas (estratégia simples)
+    await supabase.from('categories').delete().neq('name', '___');
+    await supabase.from('categories').insert(categories.map(name => ({ name })));
+  }
+};
