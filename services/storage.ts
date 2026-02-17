@@ -47,76 +47,101 @@ export const getFromLocal = (key: string, defaultValue: any) => {
 
 export const storageService = {
   init: async () => {
+    console.log("🚀 Storage: Inicializando...");
     if (localStorage.getItem(STORAGE_KEYS.CONFIG) === null) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
     if (localStorage.getItem(STORAGE_KEYS.CATEGORIES) === null) saveToLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
   },
 
   async getConfig(): Promise<SiteConfig> {
-    try {
-      const remote = await db.getConfig();
-      if (remote) {
-        saveToLocal(STORAGE_KEYS.CONFIG, remote);
-        return remote;
+    console.group("📥 Storage: Buscando Configuração");
+    const local = getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
+    if (isSupabaseReady()) {
+      try {
+        const remote = await db.getConfig();
+        if (remote) {
+          console.log("✅ Supabase: Config encontrada. Sincronizando local.");
+          saveToLocal(STORAGE_KEYS.CONFIG, remote);
+          console.groupEnd();
+          return remote;
+        }
+        console.warn("⚠️ Supabase: Tabela vazia. Usando local.");
+      } catch (e) {
+        console.error("❌ Supabase: Falha na conexão.", e);
       }
-    } catch (e) {
-      console.warn("Supabase Offline, usando LocalStorage para Config");
+    } else {
+      console.log("ℹ️ Storage: Modo Offline. Usando LocalStorage.");
     }
-    return getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
+    console.groupEnd();
+    return local;
   },
   
   async updateConfig(config: SiteConfig) {
+    console.log("📤 Storage: Salvando Configuração...");
     saveToLocal(STORAGE_KEYS.CONFIG, config);
-    if (isSupabaseReady()) {
-      await db.updateConfig(config);
-    }
+    if (isSupabaseReady()) await db.updateConfig(config);
   },
 
   async getCategories(): Promise<string[]> {
-    try {
+    const local = getFromLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+    if (isSupabaseReady()) {
       const remote = await db.getCategories();
       if (remote && remote.length > 0) {
         saveToLocal(STORAGE_KEYS.CATEGORIES, remote);
         return remote;
       }
-    } catch (e) {
-      console.warn("Erro ao buscar categorias remotas");
     }
-    return getFromLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+    return local;
   },
 
   async saveCategories(categories: string[]) {
     saveToLocal(STORAGE_KEYS.CATEGORIES, categories);
-    if (isSupabaseReady()) {
-      await db.saveCategories(categories);
-    }
+    if (isSupabaseReady()) await db.saveCategories(categories);
   },
 
   async getUsers(): Promise<User[]> {
-    const remote = await db.getUsers();
-    if (remote && remote.length > 0) {
-      saveToLocal(STORAGE_KEYS.USERS, remote);
-      return remote;
+    console.group("📥 Storage: Sincronizando Usuários");
+    const local = getFromLocal(STORAGE_KEYS.USERS, []);
+    if (isSupabaseReady()) {
+      try {
+        const remote = await db.getUsers();
+        if (remote && remote.length > 0) {
+          console.log(`✅ Supabase: ${remote.length} usuários sincronizados.`);
+          saveToLocal(STORAGE_KEYS.USERS, remote);
+          console.groupEnd();
+          return remote;
+        }
+        console.log("ℹ️ Supabase: Nenhum usuário remoto.");
+      } catch (e) {
+        console.error("❌ Supabase: Erro na listagem.");
+      }
     }
-    return getFromLocal(STORAGE_KEYS.USERS, []);
+    console.groupEnd();
+    return local;
   },
   
   async getPosts(): Promise<Post[]> {
-    const remote = await db.getPosts();
-    if (remote && remote.length > 0) {
-      saveToLocal(STORAGE_KEYS.POSTS, remote);
-      return remote;
+    console.group("📥 Storage: Sincronizando Posts");
+    const local = getFromLocal(STORAGE_KEYS.POSTS, []);
+    if (isSupabaseReady()) {
+      const remote = await db.getPosts();
+      if (remote && remote.length > 0) {
+        saveToLocal(STORAGE_KEYS.POSTS, remote);
+        console.groupEnd();
+        return remote;
+      }
     }
-    return getFromLocal(STORAGE_KEYS.POSTS, []);
+    console.groupEnd();
+    return local;
   },
 
   async findUserByEmail(email: string): Promise<User | undefined> {
     if (email.toLowerCase() === 'admin@helio.com') {
       return { id: 'admin', name: 'Administrador', email: 'admin@helio.com', role: UserRole.ADMIN, paymentStatus: PaymentStatus.NOT_APPLICABLE, createdAt: new Date().toISOString() };
     }
-    
-    const remote = await db.findUserByEmail(email);
-    if (remote) return remote;
-    
+    if (isSupabaseReady()) {
+      const remote = await db.findUserByEmail(email);
+      if (remote) return remote;
+    }
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     return users.find((u: User) => u.email.toLowerCase() === email.toLowerCase());
   },
@@ -125,36 +150,29 @@ export const storageService = {
     const newUser: User = { ...userData, id: 'u-' + Date.now(), createdAt: new Date().toISOString() };
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     saveToLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-    if (isSupabaseReady()) {
-      await db.updateUser(newUser);
-    }
+    if (isSupabaseReady()) await db.updateUser(newUser);
     return newUser;
   },
 
   async updateUser(updatedUser: User) {
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     saveToLocal(STORAGE_KEYS.USERS, users.map((u: User) => u.id === updatedUser.id ? updatedUser : u));
-    if (isSupabaseReady()) {
-      await db.updateUser(updatedUser);
-    }
+    if (isSupabaseReady()) await db.updateUser(updatedUser);
     const session = getFromLocal(STORAGE_KEYS.SESSION, null);
     if (session && session.id === updatedUser.id) saveToLocal(STORAGE_KEYS.SESSION, updatedUser);
   },
 
   async addPost(post: Post) {
+    console.log("📤 Storage: Publicando novo post...");
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, [post, ...posts]);
-    if (isSupabaseReady()) {
-      await db.addPost(post);
-    }
+    if (isSupabaseReady()) await db.addPost(post);
   },
 
   async deletePost(id: string) {
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, posts.filter((p: Post) => p.id !== id));
-    if (isSupabaseReady()) {
-      await db.deletePost(id);
-    }
+    if (isSupabaseReady()) await db.deletePost(id);
   },
 
   getPlans(): Plan[] {

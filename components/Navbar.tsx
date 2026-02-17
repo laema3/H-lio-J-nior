@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { ViewState, User, UserRole, SiteConfig } from '../types';
-import { Menu, X, Radio, LogOut } from 'lucide-react';
+import { Menu, X, Radio, LogOut, Wifi, WifiOff, Shield } from 'lucide-react';
+import { isSupabaseReady } from '../services/supabase';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -13,6 +14,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, currentView, onLogout, config }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isOnline = isSupabaseReady();
 
   const navItem = (label: string, target: ViewState, active: boolean) => (
     <button
@@ -35,12 +37,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           
-          {/* Logo Paisagem */}
           <div 
             className="flex items-center gap-4 cursor-pointer group" 
             onClick={() => setCurrentView('HOME')}
           >
-            <div className="h-12 min-w-[120px] max-w-[200px] bg-white/5 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 overflow-hidden border border-white/5 p-1">
+            <div className="h-12 min-w-[120px] max-w-[200px] bg-white/5 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 overflow-hidden border border-white/5 p-1 relative">
               {config.headerLogoUrl ? (
                 <img src={config.headerLogoUrl} className="w-full h-full object-contain" alt="Logo Topo" />
               ) : (
@@ -50,9 +51,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                 </div>
               )}
             </div>
+            {/* Status Cloud Indicator */}
+            <div className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full text-[8px] font-black uppercase border ${isOnline ? 'text-green-500 border-green-500/20 bg-green-500/5' : 'text-red-500 border-red-500/20 bg-red-500/5'}`}>
+               <div className={`w-1 h-1 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+               {isOnline ? 'Cloud' : 'Offline'}
+            </div>
           </div>
 
-          {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-2">
             {navItem('Início', 'HOME', currentView === 'HOME')}
             
@@ -71,11 +76,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
             {currentUser && (
               <div className="flex items-center gap-4 ml-4 pl-4 border-l border-white/10">
                 <div className="text-right">
-                    <p className="text-sm font-bold text-white">{currentUser.name}</p>
+                    <p className="text-sm font-bold text-white flex items-center gap-2">
+                      {currentUser.name}
+                      {currentUser.role === UserRole.ADMIN && <Shield size={12} className="text-brand-accent"/>}
+                    </p>
                     <p className="text-xs text-gray-400">{currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Anunciante'}</p>
                 </div>
                 
-                {currentUser.role === UserRole.ADVERTISER && navItem('Meu Painel', 'DASHBOARD', currentView === 'DASHBOARD')}
+                {currentUser.role === UserRole.ADVERTISER && navItem('Painel', 'DASHBOARD', currentView === 'DASHBOARD')}
                 {currentUser.role === UserRole.ADMIN && navItem('Admin', 'ADMIN', currentView === 'ADMIN')}
 
                 <button 
@@ -89,8 +97,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
             )}
           </div>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="md:hidden flex items-center gap-4">
+            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="text-gray-300 hover:text-white p-2"
@@ -101,7 +109,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden bg-[#0f172a] border-b border-white/10 px-4 pt-2 pb-4 space-y-2">
            <button onClick={() => { setCurrentView('HOME'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg">Início</button>
