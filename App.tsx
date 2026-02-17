@@ -21,7 +21,8 @@ import {
     AlertTriangle,
     Plus,
     ChevronRight,
-    X
+    X,
+    Info
 } from 'lucide-react';
 
 // --- Utils ---
@@ -36,6 +37,23 @@ const getDaysRemaining = (confirmedAt?: string) => {
 };
 
 // --- Subcomponents ---
+
+const Toast: React.FC<{ message: string, type: 'success' | 'error', onClose: () => void }> = ({ message, type, onClose }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 4000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+        <div className={`fixed bottom-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom duration-300 ${
+            type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            {type === 'success' ? <Check size={20} /> : <AlertTriangle size={20} />}
+            <span className="font-bold text-sm">{message}</span>
+            <button onClick={onClose} className="ml-2 hover:opacity-70"><X size={16} /></button>
+        </div>
+    );
+};
 
 const HomeView: React.FC<{ 
   posts: Post[], 
@@ -206,7 +224,7 @@ const DashboardView: React.FC<{ user: User, onGoToPayment: () => void, onPostCre
     };
 
     const handleGenerateIA = async () => {
-        if (!keywords) return alert("Diga sobre o que é seu serviço para a IA.");
+        if (!keywords) return;
         setIsGenerating(true);
         const text = await generateAdCopy(user.profession || 'Serviços', keywords);
         setContent(text);
@@ -226,7 +244,6 @@ const DashboardView: React.FC<{ user: User, onGoToPayment: () => void, onPostCre
         });
         setTitle(''); setContent(''); setImageUrl(''); setKeywords('');
         setIsSubmitting(false);
-        alert("Anúncio publicado!");
     };
 
     return (
@@ -321,17 +338,22 @@ const AdminView: React.FC<{
     users: User[], posts: Post[], config: SiteConfig, plans: Plan[],
     onUpdateUser: (u: User) => Promise<void>, 
     onUpdateConfig: (c: SiteConfig) => Promise<void>,
-    onUpdatePlans: (p: Plan[]) => Promise<void>
-}> = ({ users, config, plans, onUpdateUser, onUpdateConfig, onUpdatePlans }) => {
+    onUpdatePlans: (p: Plan[]) => Promise<void>,
+    notify: (m: string, t: 'success' | 'error') => void
+}> = ({ users, config, plans, onUpdateUser, onUpdateConfig, onUpdatePlans, notify }) => {
     const [tab, setTab] = useState<'U' | 'C' | 'P'>('U');
     const [siteConf, setSiteConf] = useState(config);
     const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
     const [newPlan, setNewPlan] = useState<Partial<Plan>>({ name: '', price: 0, description: '' });
     const [isProcessing, setIsProcessing] = useState(false);
+    const [planToDelete, setPlanToDelete] = useState<string | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
 
     const handleAddPlan = async () => {
-        if (!newPlan.name || !newPlan.price) return alert("Preencha nome e preço.");
+        if (!newPlan.name || !newPlan.price) {
+            notify("Preencha nome e preço do plano!", "error");
+            return;
+        }
         setIsProcessing(true);
         try {
             const plan: Plan = {
@@ -342,7 +364,9 @@ const AdminView: React.FC<{
             };
             await onUpdatePlans([...plans, plan]);
             setNewPlan({ name: '', price: 0, description: '' });
-            alert("Plano cadastrado com sucesso!");
+            notify("Plano cadastrado com sucesso!", "success");
+        } catch (e) {
+            notify("Erro ao cadastrar plano.", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -355,21 +379,25 @@ const AdminView: React.FC<{
             const updated = plans.map(p => p.id === editingPlan.id ? editingPlan : p);
             await onUpdatePlans(updated);
             setEditingPlan(null);
-            alert("Plano atualizado com sucesso!");
+            notify("Plano atualizado com sucesso!", "success");
+        } catch (e) {
+            notify("Erro ao atualizar plano.", "error");
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const handleDeletePlan = async (id: string) => {
-        if (confirm("Deseja realmente excluir este plano? Esta ação removerá o plano da lista de assinaturas.")) {
-            setIsProcessing(true);
-            try {
-                await onUpdatePlans(plans.filter(p => p.id !== id));
-                alert("Plano excluído.");
-            } finally {
-                setIsProcessing(false);
-            }
+    const confirmDeletePlan = async () => {
+        if (!planToDelete) return;
+        setIsProcessing(true);
+        try {
+            await onUpdatePlans(plans.filter(p => p.id !== planToDelete));
+            setPlanToDelete(null);
+            notify("Plano removido com sucesso.", "success");
+        } catch (e) {
+            notify("Erro ao remover plano.", "error");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -403,7 +431,10 @@ const AdminView: React.FC<{
                                         }`}>{u.paymentStatus}</span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button onClick={() => onUpdateUser({...u, paymentStatus: u.paymentStatus === PaymentStatus.CONFIRMED ? PaymentStatus.AWAITING : PaymentStatus.CONFIRMED})} className="p-2 bg-brand-primary/10 rounded-lg text-brand-primary hover:bg-brand-primary hover:text-white transition-all"><Edit3 size={14} /></button>
+                                        <button onClick={() => {
+                                            onUpdateUser({...u, paymentStatus: u.paymentStatus === PaymentStatus.CONFIRMED ? PaymentStatus.AWAITING : PaymentStatus.CONFIRMED});
+                                            notify(`Status de ${u.name} alterado!`, "success");
+                                        }} className="p-2 bg-brand-primary/10 rounded-lg text-brand-primary hover:bg-brand-primary hover:text-white transition-all"><Edit3 size={14} /></button>
                                     </td>
                                 </tr>
                             ))}
@@ -440,7 +471,7 @@ const AdminView: React.FC<{
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2">
                                                 <button onClick={() => setEditingPlan(p)} className="p-2 bg-blue-500/10 rounded-lg text-blue-400 hover:bg-blue-500 hover:text-white transition-all"><Edit3 size={14} /></button>
-                                                <button onClick={() => handleDeletePlan(p.id)} className="p-2 bg-red-500/10 rounded-lg text-red-400 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={14} /></button>
+                                                <button onClick={() => setPlanToDelete(p.id)} className="p-2 bg-red-500/10 rounded-lg text-red-400 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={14} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -467,7 +498,10 @@ const AdminView: React.FC<{
                             <label className="text-[10px] font-bold text-gray-500 uppercase mb-2 block">Subtítulo explicativo</label>
                             <textarea placeholder="Subtítulo" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 h-32 text-white focus:border-brand-primary outline-none" value={siteConf.heroSubtitle} onChange={e => setSiteConf({...siteConf, heroSubtitle: e.target.value})} />
                         </div>
-                        <Button onClick={() => onUpdateConfig(siteConf)} className="w-full py-4">SALVAR ALTERAÇÕES DO SITE</Button>
+                        <Button onClick={async () => {
+                             await onUpdateConfig(siteConf);
+                             notify("Configurações do site salvas!", "success");
+                        }} className="w-full py-4">SALVAR ALTERAÇÕES DO SITE</Button>
                     </div>
                     <div>
                         <label className="text-[10px] font-bold text-gray-500 uppercase mb-2 block">Foto Principal</label>
@@ -481,6 +515,21 @@ const AdminView: React.FC<{
                                 const f = e.target.files?.[0];
                                 if (f) { const r = new FileReader(); r.onload = () => setSiteConf({...siteConf, heroImageUrl: r.result as string}); r.readAsDataURL(f); }
                             }} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Confirmação de Exclusão */}
+            {planToDelete && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+                    <div className="glass-panel w-full max-w-sm p-8 rounded-[40px] border border-red-500/20 text-center">
+                        <Trash2 className="mx-auto text-red-500 mb-4" size={48} />
+                        <h3 className="text-xl font-bold text-white mb-2">Excluir Plano?</h3>
+                        <p className="text-gray-400 text-sm mb-8">Esta ação removerá o plano permanentemente. Usuários assinantes não serão afetados imediatamente.</p>
+                        <div className="flex gap-4">
+                            <Button variant="outline" onClick={() => setPlanToDelete(null)} className="flex-1">CANCELAR</Button>
+                            <Button variant="danger" onClick={confirmDeletePlan} isLoading={isProcessing} className="flex-1">EXCLUIR</Button>
                         </div>
                     </div>
                 </div>
@@ -528,6 +577,9 @@ const App: React.FC = () => {
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
+
+    const notify = (m: string, t: 'success' | 'error') => setToast({ m, t });
 
     const refreshData = async () => {
         try {
@@ -553,21 +605,19 @@ const App: React.FC = () => {
                 }
             }
         } catch (e) {
-            console.warn("Falha ao sincronizar dados remotos. Usando cache local.");
+            console.warn("Falha ao sincronizar dados remotos.");
         }
     };
 
     useEffect(() => {
         const init = async () => {
             try {
-                // Tenta inicializar o Supabase e carregar dados
                 await storageService.init();
                 await refreshData();
             } catch (err) {
                 console.error("Erro na inicialização:", err);
-                setError("Ocorreu um erro ao carregar o portal. Verifique sua conexão.");
+                setError("Ocorreu um erro ao carregar o portal.");
             } finally {
-                // Garante que o loading saia independente do resultado
                 setIsLoading(false);
             }
         };
@@ -604,9 +654,9 @@ const App: React.FC = () => {
             case 'HOME': return <HomeView posts={posts} users={allUsers} config={siteConfig} filterCategory={filterCategory} setFilterCategory={setFilterCategory} onStartAdvertising={() => setCurrentView('REGISTER')} />;
             case 'LOGIN': return <AuthView mode="LOGIN" onLogin={handleLogin} onSwitchMode={setCurrentView} />;
             case 'REGISTER': return <AuthView mode="REGISTER" onLogin={handleLogin} onSwitchMode={setCurrentView} />;
-            case 'DASHBOARD': return currentUser ? <DashboardView user={currentUser} onGoToPayment={() => setCurrentView('PAYMENT')} onPostCreated={async p => { await storageService.addPost(p); refreshData(); }} /> : null;
-            case 'ADMIN': return currentUser?.role === UserRole.ADMIN ? <AdminView users={allUsers} posts={posts} plans={plans} config={siteConfig} onUpdateUser={async u => { await storageService.updateUser(u); refreshData(); }} onUpdateConfig={async c => { await storageService.updateConfig(c); refreshData(); }} onUpdatePlans={async p => { await storageService.updatePlans(p); refreshData(); }} /> : null;
-            case 'PAYMENT': return currentUser ? <PaymentView user={currentUser} plans={plans} onCancel={() => setCurrentView('DASHBOARD')} onPaymentSuccess={async pid => { await storageService.updateUser({...currentUser, planId: pid, paymentStatus: PaymentStatus.CONFIRMED}); await refreshData(); setCurrentView('DASHBOARD'); }} /> : null;
+            case 'DASHBOARD': return currentUser ? <DashboardView user={currentUser} onGoToPayment={() => setCurrentView('PAYMENT')} onPostCreated={async p => { await storageService.addPost(p); refreshData(); notify("Postagem enviada!", "success"); }} /> : null;
+            case 'ADMIN': return currentUser?.role === UserRole.ADMIN ? <AdminView users={allUsers} posts={posts} plans={plans} config={siteConfig} onUpdateUser={async u => { await storageService.updateUser(u); refreshData(); }} onUpdateConfig={async c => { await storageService.updateConfig(c); refreshData(); }} onUpdatePlans={async p => { await storageService.updatePlans(p); refreshData(); }} notify={notify} /> : null;
+            case 'PAYMENT': return currentUser ? <PaymentView user={currentUser} plans={plans} onCancel={() => setCurrentView('DASHBOARD')} onPaymentSuccess={async pid => { await storageService.updateUser({...currentUser, planId: pid, paymentStatus: PaymentStatus.CONFIRMED}); await refreshData(); setCurrentView('DASHBOARD'); notify("Assinatura confirmada!", "success"); }} /> : null;
             default: return <HomeView posts={posts} users={allUsers} config={siteConfig} filterCategory={filterCategory} setFilterCategory={setFilterCategory} onStartAdvertising={() => setCurrentView('REGISTER')} />;
         }
     };
@@ -627,6 +677,7 @@ const App: React.FC = () => {
                     {renderView()}
                 </div>
             </main>
+            {toast && <Toast message={toast.m} type={toast.t} onClose={() => setToast(null)} />}
         </div>
     );
 };
