@@ -53,31 +53,52 @@ export const PostCard: React.FC<PostCardProps> = ({ post, author }) => {
     window.open(`https://wa.me/${clean}`, '_blank');
   };
 
+  const imageUrl = post.imageUrl || `https://picsum.photos/600/337?random=${post.id}`;
+
   return (
-    <div className="glass-panel rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300 flex flex-col h-full group">
-      <div className="relative aspect-video overflow-hidden bg-brand-dark">
-        <img src={post.imageUrl || `https://picsum.photos/600/337?random=${post.id}`} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-        <div className="absolute top-3 left-3 flex flex-col gap-2">
-           <div className="bg-brand-primary text-white text-[10px] px-3 py-1 rounded-full uppercase font-black backdrop-blur-md self-start">
+    <div className="glass-panel rounded-[32px] overflow-hidden hover:shadow-2xl hover:shadow-brand-primary/10 transition-all duration-500 flex flex-col h-full group border border-white/5">
+      {/* Moldura de Imagem Inteligente */}
+      <div className="relative aspect-video overflow-hidden bg-black/40">
+        {/* Fundo desfocado para preencher as bordas caso a imagem seja vertical */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center blur-xl opacity-30 scale-110" 
+          style={{ backgroundImage: `url(${imageUrl})` }}
+        />
+        {/* Imagem principal enquadrada */}
+        <img 
+          src={imageUrl} 
+          alt={post.title} 
+          className="relative w-full h-full object-contain group-hover:scale-105 transition-transform duration-700" 
+        />
+        
+        <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+           <div className="bg-brand-primary/90 text-white text-[9px] px-3 py-1 rounded-full uppercase font-black backdrop-blur-md self-start tracking-wider">
              {post.category}
            </div>
            {author?.expiresAt && author.role !== 'ADMIN' && <Countdown expiresAt={author.expiresAt} />}
         </div>
       </div>
       
-      <div className="p-5 flex flex-col flex-grow">
-        <div className="flex items-center gap-2 mb-2 text-gray-400 text-[10px] font-bold uppercase">
+      <div className="p-6 flex flex-col flex-grow bg-gradient-to-b from-transparent to-brand-dark/30">
+        <div className="flex items-center gap-2 mb-3 text-gray-400 text-[10px] font-black uppercase tracking-widest">
             <UserIcon size={12} className="text-brand-secondary" />
             <span>{post.authorName}</span>
         </div>
-        <h3 className="text-lg font-black text-white mb-2 leading-tight">{post.title}</h3>
-        <p className="text-gray-400 text-xs mb-6 flex-grow line-clamp-3 leading-relaxed italic">"{post.content}"</p>
-        <div className="grid grid-cols-2 gap-2 mt-auto">
-          <button onClick={handleWhatsApp} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-2 uppercase">
-            <MessageCircle size={14} /> WhatsApp
+        <h3 className="text-xl font-black text-white mb-3 leading-tight uppercase tracking-tighter">{post.title}</h3>
+        <p className="text-gray-400 text-xs mb-8 flex-grow line-clamp-3 leading-relaxed italic opacity-80">"{post.content}"</p>
+        
+        <div className="grid grid-cols-2 gap-3 mt-auto">
+          <button 
+            onClick={handleWhatsApp} 
+            className="bg-[#25D366] hover:bg-[#128C7E] text-white px-3 py-3 rounded-2xl text-[10px] font-black flex items-center justify-center gap-2 uppercase transition-all hover:shadow-lg shadow-green-500/20"
+          >
+            <MessageCircle size={16} /> WhatsApp
           </button>
-          <button onClick={() => post.phone && window.open(`tel:${post.phone}`)} className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-3 py-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-2 uppercase">
-            <Phone size={14} /> Ligar
+          <button 
+            onClick={() => post.phone && window.open(`tel:${post.phone}`)} 
+            className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-3 py-3 rounded-2xl text-[10px] font-black flex items-center justify-center gap-2 uppercase transition-all"
+          >
+            <Phone size={16} /> Ligar
           </button>
         </div>
       </div>
