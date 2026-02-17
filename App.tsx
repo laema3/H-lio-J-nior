@@ -8,10 +8,13 @@ import { PostCard } from './components/PostCard';
 import { generateAdCopy, chatWithAssistant } from './services/geminiService';
 import { 
     Search, Clock, Check, Camera, Trash2, Edit3, AlertTriangle, Plus, ShieldCheck, Settings, CreditCard, Tag,
-    Instagram, Facebook, Youtube, Phone, MapPin, Radio, MessageCircle, Send, X, Bot, LayoutDashboard, Loader2, Image as ImageIcon, Users, CheckCircle2, XCircle
+    Instagram, Facebook, Youtube, Phone, MapPin, Radio, MessageCircle, Send, X, Bot, LayoutDashboard, Loader2, 
+    Image as ImageIcon, Users, CheckCircle2, XCircle, Layers, BarChart3, ChevronRight, Mail, PhoneCall
 } from 'lucide-react';
 
-// Função para comprimir imagens antes do upload
+// Admin Sub-Views
+type AdminSubView = 'DASHBOARD' | 'CLIENTS' | 'PAYMENTS' | 'ADS' | 'CATEGORIES' | 'PLANS' | 'SETTINGS';
+
 const compressImage = (base64Str: string): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
@@ -19,23 +22,15 @@ const compressImage = (base64Str: string): Promise<string> => {
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const MAX_WIDTH = 1200;
-            const MAX_HEIGHT = 675; // 16:9
+            const MAX_HEIGHT = 675;
             let width = img.width;
             let height = img.height;
-
             if (width > height) {
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
+                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
             } else {
-                if (height > MAX_HEIGHT) {
-                    width *= MAX_HEIGHT / height;
-                    height = MAX_HEIGHT;
-                }
+                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
             }
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = width; canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL('image/jpeg', 0.8));
@@ -148,6 +143,7 @@ const Footer: React.FC<{ config: SiteConfig }> = ({ config }) => (
 const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
+    const [adminSubView, setAdminSubView] = useState<AdminSubView>('DASHBOARD');
     const [currentUser, setCurrentUser] = useState<User | null>(() => getFromLocal(STORAGE_KEYS.SESSION, null));
     const [posts, setPosts] = useState<Post[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -164,39 +160,26 @@ const App: React.FC = () => {
             storageService.getCategories(),
             storageService.getConfig()
         ]);
-        setPosts(p);
-        setAllUsers(u);
-        setCategories(c);
-        setSiteConfig(cfg);
-        setPlans(storageService.getPlans());
+        setPosts(p); setAllUsers(u); setCategories(c); setSiteConfig(cfg); setPlans(storageService.getPlans());
         const session = getFromLocal(STORAGE_KEYS.SESSION, null);
         if (session) {
             const freshUser = u.find(user => user.id === session.id);
-            if (freshUser) {
-                setCurrentUser(freshUser);
-                saveToLocal(STORAGE_KEYS.SESSION, freshUser);
-            } else if (session.role === UserRole.ADMIN) {
-                setCurrentUser(session);
-            }
+            if (freshUser) { setCurrentUser(freshUser); saveToLocal(STORAGE_KEYS.SESSION, freshUser); }
+            else if (session.role === UserRole.ADMIN) { setCurrentUser(session); }
         }
         setIsLoading(false);
     };
 
-    useEffect(() => {
-        storageService.init().then(refresh);
-    }, []);
+    useEffect(() => { storageService.init().then(refresh); }, []);
 
     const handleLogin = (user: User) => {
         saveToLocal(STORAGE_KEYS.SESSION, user);
-        refresh().then(() => {
-            setCurrentView(user.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD');
-        });
+        refresh().then(() => { setCurrentView(user.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD'); });
     };
 
     const handleLogout = () => {
         localStorage.removeItem(STORAGE_KEYS.SESSION);
-        setCurrentUser(null);
-        setCurrentView('HOME');
+        setCurrentUser(null); setCurrentView('HOME');
     };
 
     if (isLoading) {
@@ -218,7 +201,6 @@ const App: React.FC = () => {
                     return auth?.paymentStatus === PaymentStatus.CONFIRMED && !isExp;
                 });
                 const filtered = filterCategory === 'ALL' ? visiblePosts : visiblePosts.filter(p => p.category === filterCategory);
-
                 return (
                     <div className="animate-in fade-in duration-700">
                         <section className="relative pt-32 pb-20 overflow-hidden">
@@ -308,116 +290,263 @@ const App: React.FC = () => {
 
             case 'ADMIN':
                 if (currentUser?.role !== UserRole.ADMIN) return null;
+                const advertisers = allUsers.filter(u => u.role === UserRole.ADVERTISER);
+                const awaitingPayments = advertisers.filter(u => u.paymentStatus === PaymentStatus.AWAITING);
+
                 return (
-                    <div className="pt-24 pb-20 max-w-7xl mx-auto px-4 animate-in fade-in duration-500">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="glass-panel p-10 rounded-[40px] space-y-6">
-                                <h3 className="text-2xl font-black uppercase flex items-center gap-2"><Settings className="text-brand-primary" /> Visual & Config</h3>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div onClick={() => document.getElementById('h-logo')?.click()} className="aspect-[3/1] bg-brand-dark rounded-xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer group">
-                                            {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain" /> : <div className="flex flex-col items-center"><Plus className="text-gray-500"/><span className="text-[8px] font-bold">Topo</span></div>}
-                                            <input id="h-logo" type="file" className="hidden" onChange={async (e) => {
-                                                const f = e.target.files?.[0]; if(f) {
-                                                    const r = new FileReader(); r.onloadend = async () => {
-                                                        const compressed = await compressImage(r.result as string);
-                                                        storageService.updateConfig({...siteConfig, headerLogoUrl: compressed}).then(refresh);
-                                                    }; r.readAsDataURL(f);
-                                                }
-                                            }} />
+                    <div className="min-h-screen bg-brand-dark pt-20 flex">
+                        {/* Sidebar */}
+                        <aside className="w-64 border-r border-white/5 bg-brand-dark/50 flex flex-col p-6 gap-2 hidden md:flex shrink-0">
+                            {[
+                                { id: 'DASHBOARD', label: 'Resumo', icon: BarChart3 },
+                                { id: 'CLIENTS', label: 'Clientes', icon: Users },
+                                { id: 'PAYMENTS', label: 'Pagamentos', icon: CreditCard, count: awaitingPayments.length },
+                                { id: 'ADS', label: 'Anúncios', icon: ImageIcon },
+                                { id: 'CATEGORIES', label: 'Categorias', icon: Tag },
+                                { id: 'PLANS', label: 'Planos', icon: Layers },
+                                { id: 'SETTINGS', label: 'Ajustes', icon: Settings }
+                            ].map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setAdminSubView(item.id as AdminSubView)}
+                                    className={`flex items-center justify-between p-3 rounded-xl transition-all group ${adminSubView === item.id ? 'bg-brand-primary text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <item.icon size={18} />
+                                        <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
+                                    </div>
+                                    {item.count ? <span className="bg-brand-secondary text-[10px] px-1.5 py-0.5 rounded-full text-white">{item.count}</span> : <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                </button>
+                            ))}
+                        </aside>
+
+                        {/* Main Content Area */}
+                        <main className="flex-1 p-8 overflow-y-auto">
+                            {adminSubView === 'DASHBOARD' && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <h2 className="text-3xl font-black uppercase">Visão Geral</h2>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        <div className="glass-panel p-6 rounded-3xl border border-white/5">
+                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Total Anunciantes</p>
+                                            <p className="text-4xl font-black">{advertisers.length}</p>
                                         </div>
-                                        <div onClick={() => document.getElementById('f-logo')?.click()} className="aspect-[3/1] bg-brand-dark rounded-xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer group">
-                                            {siteConfig.footerLogoUrl ? <img src={siteConfig.footerLogoUrl} className="w-full h-full object-contain" /> : <div className="flex flex-col items-center"><Plus className="text-gray-500"/><span className="text-[8px] font-bold">Rodapé</span></div>}
-                                            <input id="f-logo" type="file" className="hidden" onChange={async (e) => {
-                                                const f = e.target.files?.[0]; if(f) {
-                                                    const r = new FileReader(); r.onloadend = async () => {
-                                                        const compressed = await compressImage(r.result as string);
-                                                        storageService.updateConfig({...siteConfig, footerLogoUrl: compressed}).then(refresh);
-                                                    }; r.readAsDataURL(f);
-                                                }
-                                            }} />
+                                        <div className="glass-panel p-6 rounded-3xl border border-white/5 border-l-brand-secondary border-l-4">
+                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Pendentes Pgto</p>
+                                            <p className="text-4xl font-black text-brand-secondary">{awaitingPayments.length}</p>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-3xl border border-white/5">
+                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Anúncios Ativos</p>
+                                            <p className="text-4xl font-black text-brand-primary">{posts.length}</p>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-3xl border border-white/5">
+                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Categorias</p>
+                                            <p className="text-4xl font-black">{categories.length}</p>
                                         </div>
                                     </div>
-                                    
-                                    <div onClick={() => document.getElementById('hero-img-admin')?.click()} className="aspect-video bg-brand-dark rounded-2xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer group">
-                                        {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-500" />}
-                                        <input id="hero-img-admin" type="file" className="hidden" accept="image/*" onChange={async (e) => {
-                                            const f = e.target.files?.[0]; if(f) {
-                                                const r = new FileReader(); r.onloadend = async () => {
-                                                    const compressed = await compressImage(r.result as string);
-                                                    storageService.updateConfig({...siteConfig, heroImageUrl: compressed}).then(refresh);
-                                                }; r.readAsDataURL(f);
-                                            }
-                                        }} />
-                                    </div>
-
-                                    <input className="bg-white/5 border border-white/10 p-4 rounded-xl text-sm w-full" value={siteConfig.heroTitle} onChange={e => storageService.updateConfig({...siteConfig, heroTitle: e.target.value}).then(refresh)} placeholder="Título do Portal" />
-                                    <textarea className="bg-white/5 border border-white/10 p-4 rounded-xl text-sm h-20 w-full" value={siteConfig.heroSubtitle} onChange={e => storageService.updateConfig({...siteConfig, heroSubtitle: e.target.value}).then(refresh)} placeholder="Slogan" />
-                                    <Button onClick={() => setToast({m: "Sincronizado!", t: "success"})} className="w-full">Salvar Alterações</Button>
-                                </div>
-                            </div>
-
-                            <div className="space-y-8">
-                                <div className="glass-panel p-8 rounded-[40px]">
-                                    <h3 className="text-xl font-black uppercase mb-4 flex items-center gap-2"><Tag className="text-brand-accent"/> Categorias</h3>
-                                    <div className="flex gap-2 mb-4">
-                                        <input id="newCat" placeholder="Nova..." className="flex-1 bg-white/5 border border-white/10 p-3 rounded-xl text-sm" />
-                                        <Button onClick={() => {
-                                            const v = (document.getElementById('newCat') as HTMLInputElement).value;
-                                            if(v) { storageService.saveCategories([...categories, v]).then(() => { refresh(); (document.getElementById('newCat') as HTMLInputElement).value = ''; }); }
-                                        }}><Plus size={16}/></Button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                                        {categories.map(c => (
-                                            <div key={c} className="bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs">
-                                                <span>{c}</span>
-                                                <button onClick={() => storageService.saveCategories(categories.filter(cat => cat !== c)).then(refresh)} className="text-red-500"><Trash2 size={12}/></button>
-                                            </div>
-                                        ))}
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        <div className="glass-panel p-8 rounded-[40px] space-y-4">
+                                            <h3 className="font-black uppercase text-sm">Últimos Clientes</h3>
+                                            {advertisers.slice(0, 5).map(u => (
+                                                <div key={u.id} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-black uppercase">{u.name}</span>
+                                                        <span className="text-[10px] text-gray-500">{u.email}</span>
+                                                    </div>
+                                                    <span className={`text-[8px] px-2 py-1 rounded-full font-bold uppercase ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>{u.paymentStatus}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="glass-panel p-8 rounded-[40px] space-y-4">
+                                            <h3 className="font-black uppercase text-sm">Atividade Recente</h3>
+                                            {posts.slice(0, 5).map(p => (
+                                                <div key={p.id} className="flex items-center gap-4 py-3 border-b border-white/5 last:border-0">
+                                                    <img src={p.imageUrl} className="w-10 h-10 rounded-lg object-cover" />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-black uppercase line-clamp-1">{p.title}</span>
+                                                        <span className="text-[10px] text-gray-500">por {p.authorName}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
+                            )}
 
-                                <div className="glass-panel p-8 rounded-[40px] flex flex-col h-full max-h-[400px]">
-                                    <h3 className="text-xl font-black uppercase mb-4 flex items-center gap-2"><Users className="text-brand-secondary"/> Gestão de Assinantes</h3>
-                                    <div className="overflow-y-auto space-y-3 pr-2">
-                                        {allUsers.filter(u => u.role !== UserRole.ADMIN).map(u => (
-                                            <div key={u.id} className="bg-white/5 p-4 rounded-2xl flex items-center justify-between border border-white/5 group hover:border-brand-primary/30 transition-all">
+                            {adminSubView === 'CLIENTS' && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <h2 className="text-3xl font-black uppercase">Listagem de Clientes</h2>
+                                    <div className="glass-panel rounded-[32px] overflow-hidden">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-white/5 border-b border-white/10">
+                                                <tr className="text-[10px] font-black uppercase text-gray-500">
+                                                    <th className="px-6 py-4">Nome</th>
+                                                    <th className="px-6 py-4">Contato</th>
+                                                    <th className="px-6 py-4">Profissão</th>
+                                                    <th className="px-6 py-4">Status</th>
+                                                    <th className="px-6 py-4">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                {advertisers.map(u => (
+                                                    <tr key={u.id} className="hover:bg-white/5 transition-colors">
+                                                        <td className="px-6 py-4">
+                                                            <p className="text-sm font-black text-white">{u.name}</p>
+                                                            <p className="text-[10px] text-gray-500">{u.email}</p>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex gap-2">
+                                                                <a href={`mailto:${u.email}`} className="p-1.5 bg-brand-primary/10 text-brand-primary rounded-lg hover:bg-brand-primary hover:text-white transition-all"><Mail size={14}/></a>
+                                                                <a href={`tel:${u.phone}`} className="p-1.5 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"><PhoneCall size={14}/></a>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-xs font-bold text-gray-400">{u.profession || 'N/A'}</td>
+                                                        <td className="px-6 py-4">
+                                                            <span className={`text-[8px] px-2 py-1 rounded-full font-black uppercase ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>{u.paymentStatus}</span>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <button onClick={() => { if(confirm("Deseja remover este cliente e seus anúncios?")) { advertisers.filter(cl => cl.id !== u.id); /* Storage logic would go here */ refresh(); } }} className="text-red-500 hover:bg-red-500/10 p-2 rounded-xl transition-all"><Trash2 size={16}/></button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'PAYMENTS' && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <h2 className="text-3xl font-black uppercase">Liberação Manual</h2>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {awaitingPayments.length > 0 ? awaitingPayments.map(u => (
+                                            <div key={u.id} className="glass-panel p-6 rounded-3xl flex items-center justify-between border-l-4 border-l-yellow-500">
                                                 <div className="flex flex-col">
-                                                    <span className="text-xs font-black uppercase tracking-tighter">{u.name}</span>
-                                                    <span className={`text-[8px] font-bold mt-1 ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'text-green-500' : 'text-yellow-500'}`}>{u.paymentStatus}</span>
+                                                    <span className="text-sm font-black uppercase">{u.name}</span>
+                                                    <span className="text-xs text-gray-500">Plano Pretendido: {plans.find(p => p.id === u.planId)?.name || 'N/A'}</span>
                                                 </div>
-                                                <div className="flex gap-1">
-                                                    {u.paymentStatus !== PaymentStatus.CONFIRMED ? (
-                                                        <button 
-                                                            onClick={() => {
-                                                                const exp = new Date(); exp.setDate(exp.getDate() + 30);
-                                                                storageService.updateUser({...u, paymentStatus: PaymentStatus.CONFIRMED, expiresAt: exp.toISOString()}).then(refresh);
-                                                                setToast({m: "Pagamento Confirmado!", t: "success"});
-                                                            }}
-                                                            className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"
-                                                            title="Confirmar Pagamento Manual"
-                                                        >
-                                                            <CheckCircle2 size={16} />
-                                                        </button>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={() => {
-                                                                storageService.updateUser({...u, paymentStatus: PaymentStatus.AWAITING, expiresAt: undefined}).then(refresh);
-                                                                setToast({m: "Acesso Suspenso!", t: "error"});
-                                                            }}
-                                                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                                                            title="Suspender Acesso"
-                                                        >
-                                                            <XCircle size={16} />
-                                                        </button>
-                                                    )}
+                                                <div className="flex items-center gap-4">
+                                                    <button 
+                                                        onClick={() => {
+                                                            const exp = new Date(); exp.setDate(exp.getDate() + 30);
+                                                            storageService.updateUser({...u, paymentStatus: PaymentStatus.CONFIRMED, expiresAt: exp.toISOString()}).then(refresh);
+                                                            setToast({m: "Acesso Liberado com Sucesso!", t: "success"});
+                                                        }}
+                                                        className="flex items-center gap-2 bg-green-500 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-green-500/20"
+                                                    >
+                                                        <CheckCircle2 size={16}/> Liberar Acesso
+                                                    </button>
                                                 </div>
+                                            </div>
+                                        )) : (
+                                            <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
+                                                <Check size={48} className="mx-auto text-green-500 mb-4 opacity-30" />
+                                                <p className="text-gray-500 font-bold uppercase text-[10px]">Tudo certo! Sem pagamentos pendentes.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'ADS' && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <h2 className="text-3xl font-black uppercase">Moderação de Anúncios</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {posts.map(p => (
+                                            <div key={p.id} className="relative group">
+                                                <PostCard post={p} author={allUsers.find(u => u.id === p.authorId)} />
+                                                <button onClick={() => storageService.deletePost(p.id).then(refresh)} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-xl z-20"><Trash2 size={16}/></button>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            )}
+
+                            {adminSubView === 'CATEGORIES' && (
+                                <div className="space-y-8 animate-in fade-in duration-500 max-w-2xl">
+                                    <h2 className="text-3xl font-black uppercase">Categorias do Site</h2>
+                                    <div className="glass-panel p-8 rounded-[40px] space-y-6">
+                                        <div className="flex gap-2">
+                                            <input id="newCatAdmin" placeholder="Nome da Categoria..." className="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold" />
+                                            <Button onClick={() => {
+                                                const v = (document.getElementById('newCatAdmin') as HTMLInputElement).value;
+                                                if(v) { storageService.saveCategories([...categories, v]).then(() => { refresh(); (document.getElementById('newCatAdmin') as HTMLInputElement).value = ''; }); }
+                                            }} className="px-8"><Plus/></Button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {categories.map(c => (
+                                                <div key={c} className="bg-brand-dark/50 border border-white/10 p-4 rounded-2xl flex items-center justify-between group hover:border-brand-primary transition-all">
+                                                    <span className="text-xs font-black uppercase tracking-widest">{c}</span>
+                                                    <button onClick={() => storageService.saveCategories(categories.filter(cat => cat !== c)).then(refresh)} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'PLANS' && (
+                                <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl">
+                                    <h2 className="text-3xl font-black uppercase">Planos e Preços</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {plans.map(p => (
+                                            <div key={p.id} className="glass-panel p-8 rounded-[40px] border border-white/5">
+                                                <h4 className="font-black text-xs text-gray-500 uppercase mb-6 tracking-widest">{p.name}</h4>
+                                                <div className="flex items-baseline gap-1 mb-8">
+                                                    <span className="text-sm font-bold text-brand-secondary">R$</span>
+                                                    <span className="text-4xl font-black text-white">{p.price.toFixed(2)}</span>
+                                                </div>
+                                                <div className="space-y-3 mb-8">
+                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase"><Check size={14} className="text-green-500"/> {p.durationDays} Dias Ativo</div>
+                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase"><Check size={14} className="text-green-500"/> Suporte IA</div>
+                                                </div>
+                                                <Button variant="outline" className="w-full text-[10px] uppercase font-black py-3">Editar Detalhes</Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'SETTINGS' && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <h2 className="text-3xl font-black uppercase text-brand-accent">Ajustes Globais</h2>
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        <div className="glass-panel p-8 rounded-[40px] space-y-6">
+                                            <h3 className="text-sm font-black uppercase">Logos e Identidade</h3>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div onClick={() => document.getElementById('h-logo-s')?.click()} className="aspect-[3/1] bg-brand-dark rounded-xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer">
+                                                    {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain" /> : <div className="flex flex-col items-center"><Plus className="text-gray-500"/><span className="text-[8px] font-bold uppercase">Header</span></div>}
+                                                    <input id="h-logo-s" type="file" className="hidden" onChange={async (e) => {
+                                                        const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, headerLogoUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
+                                                    }} />
+                                                </div>
+                                                <div onClick={() => document.getElementById('f-logo-s')?.click()} className="aspect-[3/1] bg-brand-dark rounded-xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer">
+                                                    {siteConfig.footerLogoUrl ? <img src={siteConfig.footerLogoUrl} className="w-full h-full object-contain" /> : <div className="flex flex-col items-center"><Plus className="text-gray-500"/><span className="text-[8px] font-bold uppercase">Footer</span></div>}
+                                                    <input id="f-logo-s" type="file" className="hidden" onChange={async (e) => {
+                                                        const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, footerLogoUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
+                                                    }} />
+                                                </div>
+                                            </div>
+                                            <div onClick={() => document.getElementById('hero-img-s')?.click()} className="aspect-video bg-brand-dark rounded-2xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer group">
+                                                {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-500" />}
+                                                <input id="hero-img-s" type="file" className="hidden" onChange={async (e) => {
+                                                    const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, heroImageUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
+                                                }} />
+                                            </div>
+                                        </div>
+                                        <div className="glass-panel p-8 rounded-[40px] space-y-4">
+                                            <h3 className="text-sm font-black uppercase">Informações da Home</h3>
+                                            <input className="bg-white/5 border border-white/10 p-4 rounded-xl text-sm w-full font-bold" value={siteConfig.heroTitle} onChange={e => storageService.updateConfig({...siteConfig, heroTitle: e.target.value}).then(refresh)} placeholder="Título da Home" />
+                                            <textarea className="bg-white/5 border border-white/10 p-4 rounded-xl text-sm h-32 w-full italic" value={siteConfig.heroSubtitle} onChange={e => storageService.updateConfig({...siteConfig, heroSubtitle: e.target.value}).then(refresh)} placeholder="Subtítulo" />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input className="bg-white/5 border border-white/10 p-3 rounded-xl text-[10px] w-full font-bold uppercase" value={siteConfig.whatsapp} onChange={e => storageService.updateConfig({...siteConfig, whatsapp: e.target.value}).then(refresh)} placeholder="WhatsApp" />
+                                                <input className="bg-white/5 border border-white/10 p-3 rounded-xl text-[10px] w-full font-bold uppercase" value={siteConfig.instagramUrl} onChange={e => storageService.updateConfig({...siteConfig, instagramUrl: e.target.value}).then(refresh)} placeholder="Link Instagram" />
+                                            </div>
+                                            <Button onClick={() => setToast({m: "Sincronizado!", t: "success"})} className="w-full">Salvar Tudo</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </main>
                     </div>
                 );
 
@@ -434,21 +563,10 @@ const App: React.FC = () => {
                                     const form = e.target as any;
                                     const imgVal = (document.getElementById('postImgInput') as HTMLInputElement).value;
                                     if (!imgVal) { setToast({m: "Escolha uma imagem!", t: "error"}); return; }
-                                    
                                     await storageService.addPost({
-                                        id: 'p-'+Date.now(),
-                                        authorId: currentUser.id,
-                                        authorName: currentUser.name,
-                                        category: currentUser.profession || 'Outros',
-                                        title: form.title.value,
-                                        content: form.content.value,
-                                        imageUrl: imgVal,
-                                        whatsapp: currentUser.phone,
-                                        phone: currentUser.phone,
-                                        createdAt: new Date().toISOString()
+                                        id: 'p-'+Date.now(), authorId: currentUser.id, authorName: currentUser.name, category: currentUser.profession || 'Outros', title: form.title.value, content: form.content.value, imageUrl: imgVal, whatsapp: currentUser.phone, phone: currentUser.phone, createdAt: new Date().toISOString()
                                     });
-                                    refresh();
-                                    form.reset();
+                                    refresh(); form.reset();
                                     (document.getElementById('postImgInput') as HTMLInputElement).value = '';
                                     (document.getElementById('postImgPreview') as HTMLImageElement).classList.add('hidden');
                                     (document.getElementById('postImgPlaceholder') as HTMLElement).classList.remove('hidden');
@@ -458,26 +576,18 @@ const App: React.FC = () => {
                                         <p className="text-[10px] font-black text-gray-500 uppercase px-2">Título do Anúncio</p>
                                         <input name="title" required placeholder="Ex: Serviços de Pintura em Geral" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold focus:border-brand-primary outline-none" />
                                     </div>
-                                    
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center px-2">
                                             <p className="text-[10px] font-black text-gray-500 uppercase">Texto (IA Inteligente)</p>
                                             <button type="button" onClick={async () => {
                                                 const k = (document.getElementById('ia-keywords') as HTMLInputElement).value;
-                                                if(k) {
-                                                    const txt = await generateAdCopy(currentUser.profession || '', k);
-                                                    (document.getElementsByName('content')[0] as HTMLTextAreaElement).value = txt;
-                                                } else {
-                                                    setToast({m: "Resuma o que você faz abaixo!", t: "error"});
-                                                }
-                                            }} className="text-[9px] font-black uppercase text-brand-primary hover:text-brand-accent transition-colors flex items-center gap-1">
-                                                <Bot size={12} /> Gerar Texto IA
-                                            </button>
+                                                if(k) { const txt = await generateAdCopy(currentUser.profession || '', k); (document.getElementsByName('content')[0] as HTMLTextAreaElement).value = txt; }
+                                                else { setToast({m: "Resuma o que você faz abaixo!", t: "error"}); }
+                                            }} className="text-[9px] font-black uppercase text-brand-primary hover:text-brand-accent transition-colors flex items-center gap-1"><Bot size={12} /> Gerar Texto IA</button>
                                         </div>
                                         <textarea name="content" required placeholder="Dica: Use a IA abaixo para criar um texto matador..." className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white h-32 text-sm outline-none focus:border-brand-primary" />
                                         <input id="ia-keywords" placeholder="Digite palavras-chave: qualidade, rapidez, preço baixo..." className="w-full bg-brand-primary/10 border border-brand-primary/20 p-3 rounded-xl text-[10px] text-brand-primary font-bold placeholder:text-brand-primary/40 outline-none" />
                                     </div>
-
                                     <div className="space-y-2">
                                         <p className="text-[10px] font-black text-gray-500 uppercase px-2">Moldura da Foto (16:9)</p>
                                         <div onClick={() => document.getElementById('postFilePicker')?.click()} className="aspect-video bg-black/40 border-2 border-dashed border-white/10 rounded-3xl flex items-center justify-center cursor-pointer overflow-hidden group relative">
@@ -488,20 +598,10 @@ const App: React.FC = () => {
                                             </div>
                                             <input id="postImgInput" type="hidden" />
                                             <input id="postFilePicker" type="file" className="hidden" accept="image/*" onChange={async (e) => {
-                                                const f = e.target.files?.[0]; if(f){
-                                                    const r = new FileReader(); r.onloadend = async () => {
-                                                        const compressed = await compressImage(r.result as string);
-                                                        (document.getElementById('postImgInput') as HTMLInputElement).value = compressed;
-                                                        const prev = document.getElementById('postImgPreview') as HTMLImageElement;
-                                                        prev.src = compressed;
-                                                        prev.classList.remove('hidden');
-                                                        (document.getElementById('postImgPlaceholder') as HTMLElement).classList.add('hidden');
-                                                    }; r.readAsDataURL(f);
-                                                }
+                                                const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); (document.getElementById('postImgInput') as HTMLInputElement).value = comp; const prev = document.getElementById('postImgPreview') as HTMLImageElement; prev.src = comp; prev.classList.remove('hidden'); (document.getElementById('postImgPlaceholder') as HTMLElement).classList.add('hidden'); }; r.readAsDataURL(f); }
                                             }} />
                                         </div>
                                     </div>
-                                    
                                     <Button type="submit" className="w-full h-16 uppercase font-black text-lg shadow-xl shadow-brand-primary/20">Publicar Agora</Button>
                                 </form>
                             </div>
@@ -509,16 +609,14 @@ const App: React.FC = () => {
                                 {userPosts.map(p => (
                                     <div key={p.id} className="relative group">
                                         <PostCard post={p} author={currentUser} />
-                                        <button onClick={() => storageService.deletePost(p.id).then(refresh)} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-xl"><Trash2 size={16}/></button>
+                                        <button onClick={() => storageService.deletePost(p.id).then(refresh)} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-xl z-20"><Trash2 size={16}/></button>
                                     </div>
                                 ))}
                             </div>
                         </div>
                         <div className="lg:col-span-4 glass-panel p-8 rounded-[40px] text-center h-fit sticky top-24 border border-brand-accent/20">
                             <h3 className="font-black text-xl mb-4 text-brand-accent uppercase tracking-tighter">Sua Assinatura</h3>
-                            <div className={`p-5 rounded-2xl border mb-6 text-xs font-black uppercase tracking-widest ${currentUser.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500/30 text-green-400 bg-green-500/5' : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5'}`}>
-                                {currentUser.paymentStatus}
-                            </div>
+                            <div className={`p-5 rounded-2xl border mb-6 text-xs font-black uppercase tracking-widest ${currentUser.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500/30 text-green-400 bg-green-500/5' : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5'}`}>{currentUser.paymentStatus}</div>
                             {currentUser.expiresAt && <p className="text-[10px] font-black text-gray-500 mb-8 uppercase">Acesso válido até: {new Date(currentUser.expiresAt).toLocaleDateString()}</p>}
                             <Button onClick={() => setCurrentView('PAYMENT')} variant="secondary" className="w-full py-4 text-xs font-black uppercase">Ver Planos de Exposição</Button>
                         </div>
@@ -532,11 +630,7 @@ const App: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                             {plans.map(p => (
                                 <div key={p.id} onClick={() => {
-                                    storageService.updateUser({...currentUser!, planId: p.id, paymentStatus: PaymentStatus.AWAITING}).then(() => {
-                                        refresh();
-                                        setCurrentView('DASHBOARD');
-                                        setToast({m: "Interesse enviado! Aguarde liberação manual.", t: "success"});
-                                    });
+                                    storageService.updateUser({...currentUser!, planId: p.id, paymentStatus: PaymentStatus.AWAITING}).then(() => { refresh(); setCurrentView('DASHBOARD'); setToast({m: "Interesse enviado!", t: "success"}); });
                                 }} className="glass-panel p-8 rounded-[40px] border-2 border-white/5 hover:border-brand-primary transition-all cursor-pointer group hover:-translate-y-2">
                                     <h3 className="font-black uppercase mb-4 group-hover:text-brand-primary text-sm tracking-widest">{p.name}</h3>
                                     <div className="text-4xl font-black text-brand-secondary mb-2 tracking-tighter">R$ {p.price.toFixed(2)}</div>
@@ -547,7 +641,6 @@ const App: React.FC = () => {
                         <Button variant="outline" onClick={() => setCurrentView('DASHBOARD')} className="font-black uppercase text-[10px] px-10 tracking-widest">Voltar ao Painel</Button>
                     </div>
                 );
-            
             default: return null;
         }
     };
@@ -555,8 +648,8 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen bg-brand-dark text-gray-100 font-sans flex flex-col selection:bg-brand-primary/30">
             <Navbar currentUser={currentUser} setCurrentView={setCurrentView} currentView={currentView} onLogout={handleLogout} config={siteConfig} />
-            <main className="flex-1">{renderView()}</main>
-            <Footer config={siteConfig} />
+            <main className="flex-1 flex flex-col">{renderView()}</main>
+            {currentView !== 'ADMIN' && <Footer config={siteConfig} />}
             <AIChat config={siteConfig} />
             {toast && <Toast message={toast.m} type={toast.t} onClose={() => setToast(null)} />}
         </div>
