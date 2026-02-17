@@ -1,8 +1,7 @@
 
 export enum UserRole {
   ADMIN = 'ADMIN',
-  ADVERTISER = 'ADVERTISER',
-  VISITOR = 'VISITOR'
+  ADVERTISER = 'ADVERTISER'
 }
 
 export enum ProfessionCategory {
@@ -19,20 +18,14 @@ export enum ProfessionCategory {
 export enum PaymentStatus {
   CONFIRMED = 'PAGAMENTO CONFIRMADO',
   AWAITING = 'AGUARDANDO PAGAMENTO',
-  BLOCKED = 'BLOQUEADO',
   NOT_APPLICABLE = 'N/A'
-}
-
-export enum PaymentMethodType {
-  PIX = 'PIX',
-  CREDIT_CARD = 'Cartão de Crédito',
-  DEBIT_CARD = 'Cartão de Débito'
 }
 
 export interface Plan {
   id: string;
   name: string;
   price: number;
+  durationDays: number;
   description: string;
 }
 
@@ -49,12 +42,10 @@ export interface User {
   email: string;
   role: UserRole;
   profession?: ProfessionCategory;
-  avatarUrl?: string;
-  bio?: string;
   phone?: string;
-  planId?: string; // ID do plano selecionado
+  planId?: string;
   paymentStatus: PaymentStatus;
-  paymentConfirmedAt?: string;
+  expiresAt?: string; 
   createdAt: string;
 }
 
@@ -69,7 +60,6 @@ export interface Post {
   phone?: string;
   imageUrl?: string;
   createdAt: string;
-  likes: number;
 }
 
 export type ViewState = 'HOME' | 'LOGIN' | 'REGISTER' | 'DASHBOARD' | 'ADMIN' | 'PAYMENT';
