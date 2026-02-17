@@ -63,7 +63,7 @@ export const storageService = {
           return remote as SiteConfig;
         }
       } catch (e) {
-        console.error("Erro ao buscar config remota");
+        console.error("Erro ao buscar config remota:", e);
       }
     }
     return local;
@@ -71,24 +71,30 @@ export const storageService = {
   
   async updateConfig(config: SiteConfig) {
     saveToLocal(STORAGE_KEYS.CONFIG, config);
-    if (isSupabaseReady()) await db.updateConfig(config);
+    if (isSupabaseReady()) {
+        try { await db.updateConfig(config); } catch (e) { console.error("Erro updateConfig:", e); }
+    }
   },
 
   async getCategories(): Promise<string[]> {
     const local = getFromLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
     if (isSupabaseReady()) {
-      const remote = await db.getCategories();
-      if (remote && remote.length > 0) {
-        saveToLocal(STORAGE_KEYS.CATEGORIES, remote);
-        return remote;
-      }
+      try {
+        const remote = await db.getCategories();
+        if (remote && remote.length > 0) {
+          saveToLocal(STORAGE_KEYS.CATEGORIES, remote);
+          return remote;
+        }
+      } catch (e) { console.error("Erro getCategories:", e); }
     }
     return local;
   },
 
   async saveCategories(categories: string[]) {
     saveToLocal(STORAGE_KEYS.CATEGORIES, categories);
-    if (isSupabaseReady()) await db.saveCategories(categories);
+    if (isSupabaseReady()) {
+        try { await db.saveCategories(categories); } catch (e) { console.error("Erro saveCategories:", e); }
+    }
   },
 
   async getUsers(): Promise<User[]> {
@@ -101,7 +107,7 @@ export const storageService = {
           return remote as any[];
         }
       } catch (e) {
-        console.error("Erro ao buscar usuários");
+        console.error("Erro getUsers:", e);
       }
     }
     return local;
@@ -110,11 +116,13 @@ export const storageService = {
   async getPosts(): Promise<Post[]> {
     const local = getFromLocal(STORAGE_KEYS.POSTS, []);
     if (isSupabaseReady()) {
-      const remote = await db.getPosts();
-      if (remote && remote.length > 0) {
-        saveToLocal(STORAGE_KEYS.POSTS, remote);
-        return remote as any[];
-      }
+      try {
+        const remote = await db.getPosts();
+        if (remote && remote.length > 0) {
+          saveToLocal(STORAGE_KEYS.POSTS, remote);
+          return remote as any[];
+        }
+      } catch (e) { console.error("Erro getPosts:", e); }
     }
     return local;
   },
@@ -124,8 +132,10 @@ export const storageService = {
       return { id: 'admin', name: 'Administrador', email: 'admin@helio.com', role: UserRole.ADMIN, paymentStatus: PaymentStatus.NOT_APPLICABLE, createdAt: new Date().toISOString() };
     }
     if (isSupabaseReady()) {
-      const remote = await db.findUserByEmail(email);
-      if (remote) return remote as any;
+      try {
+        const remote = await db.findUserByEmail(email);
+        if (remote) return remote as any;
+      } catch (e) { console.error("Erro findUserByEmail:", e); }
     }
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     return users.find((u: User) => u.email.toLowerCase() === email.toLowerCase());
@@ -135,14 +145,18 @@ export const storageService = {
     const newUser: User = { ...userData, id: 'u-' + Date.now(), createdAt: new Date().toISOString() };
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     saveToLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-    if (isSupabaseReady()) await db.updateUser(newUser);
+    if (isSupabaseReady()) {
+        try { await db.updateUser(newUser); } catch (e) { console.error("Erro addUser:", e); }
+    }
     return newUser;
   },
 
   async updateUser(updatedUser: User) {
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     saveToLocal(STORAGE_KEYS.USERS, users.map((u: User) => u.id === updatedUser.id ? updatedUser : u));
-    if (isSupabaseReady()) await db.updateUser(updatedUser);
+    if (isSupabaseReady()) {
+        try { await db.updateUser(updatedUser); } catch (e) { console.error("Erro updateUser:", e); }
+    }
     const session = getFromLocal(STORAGE_KEYS.SESSION, null);
     if (session && session.id === updatedUser.id) saveToLocal(STORAGE_KEYS.SESSION, updatedUser);
   },
@@ -150,13 +164,17 @@ export const storageService = {
   async addPost(post: Post) {
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, [post, ...posts]);
-    if (isSupabaseReady()) await db.addPost(post);
+    if (isSupabaseReady()) {
+        try { await db.addPost(post); } catch (e) { console.error("Erro addPost:", e); }
+    }
   },
 
   async deletePost(id: string) {
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, posts.filter((p: Post) => p.id !== id));
-    if (isSupabaseReady()) await db.deletePost(id);
+    if (isSupabaseReady()) {
+        try { await db.deletePost(id); } catch (e) { console.error("Erro deletePost:", e); }
+    }
   },
 
   getPlans(): Plan[] {

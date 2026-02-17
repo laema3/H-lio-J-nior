@@ -28,7 +28,10 @@ export const reinitializeSupabase = (newUrl: string, newKey: string) => {
   if (isValidUrl(u) && isValidKey(k)) {
     localStorage.setItem('supabase_url_manual', u);
     localStorage.setItem('supabase_key_manual', k);
-    window.location.reload();
+    // Pequeno delay para garantir gravação síncrona em alguns browsers antes do reload
+    setTimeout(() => {
+        window.location.reload();
+    }, 100);
     return true;
   }
   return false;
@@ -64,7 +67,7 @@ export const db = {
 
       if (error) {
         if (error.message.includes("project not found") || error.message.includes("Invalid API key") || error.code === 'PGRST301') {
-          logs.push("❌ Erro Crítico: 'You do not have access to this project'.");
+          logs.push("❌ Erro Crítico: Acesso negado ao projeto.");
           logs.push("👉 Verifique se a URL e a KEY estão corretas e se o projeto não está PAUSADO no site do Supabase.");
           return { success: false, logs };
         }

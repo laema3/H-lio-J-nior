@@ -18,13 +18,18 @@ import {
 type AdminSubView = 'INICIO' | 'CLIENTES' | 'PAGAMENTOS' | 'ANUNCIOS' | 'CATEGORIAS' | 'PLANOS' | 'AJUSTES';
 
 const decodeBase64 = (base64: string) => {
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+    try {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+    } catch (e) {
+        console.error("Erro decodeBase64:", e);
+        return new Uint8Array(0);
     }
-    return bytes;
 };
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
@@ -60,6 +65,7 @@ const compressImage = (base64Str: string, quality: number = 0.8): Promise<string
             ctx?.drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL('image/jpeg', quality));
         };
+        img.onerror = () => resolve(base64Str);
     });
 };
 
@@ -98,10 +104,15 @@ const AIChat: React.FC<{ config: SiteConfig }> = ({ config }) => {
         setInput('');
         setMessages(prev => [...prev, { role: 'user', text: msg }]);
         setIsTyping(true);
-        const history = messages.map(m => ({ role: m.role, parts: [{ text: m.text }] }));
-        const response = await chatWithAssistant(msg, history);
-        setIsTyping(false);
-        setMessages(prev => [...prev, { role: 'model', text: response }]);
+        try {
+            const history = messages.map(m => ({ role: m.role, parts: [{ text: m.text }] }));
+            const response = await chatWithAssistant(msg, history);
+            setMessages(prev => [...prev, { role: 'model', text: response }]);
+        } catch (e) {
+            setMessages(prev => [...prev, { role: 'model', text: "Tive um problema de conexão. Tente novamente mais tarde." }]);
+        } finally {
+            setIsTyping(false);
+        }
     };
 
     return (
@@ -115,7 +126,7 @@ const AIChat: React.FC<{ config: SiteConfig }> = ({ config }) => {
                         </div>
                         <button onClick={() => setIsOpen(false)}><X size={20} className="text-white/60"/></button>
                     </div>
-                    <button onClick={() => window.open(`https://wa.me/${config.whatsapp?.replace(/\D/g,'')}`, '_blank')} className="bg-green-500/10 text-green-400 py-3 text-[10px] font-black uppercase tracking-widest border-b border-white/5 flex items-center justify-center gap-2">
+                    <button onClick={() => window.open(`https://wa.me/${config.whatsapp?.replace(/\D/g,'') || ''}`, '_blank')} className="bg-green-500/10 text-green-400 py-3 text-[10px] font-black uppercase tracking-widest border-b border-white/5 flex items-center justify-center gap-2">
                         <MessageCircle size={14} /> Falar com um Humano
                     </button>
                     <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-brand-dark/50">
@@ -151,9 +162,9 @@ const Footer: React.FC<{ config: SiteConfig, setCurrentView: (v: ViewState) => v
                         className="inline-block h-16 w-56 bg-white/5 rounded-2xl border border-white/5 overflow-hidden p-2 cursor-pointer hover:bg-white/10 transition-all"
                         onClick={() => { window.scrollTo({top: 0, behavior: 'smooth'}); setCurrentView('HOME'); }}
                     >
-                        {config.footerLogoUrl ? <img src={config.footerLogoUrl} className="w-full h-full object-contain" /> : <span className="font-black text-white text-lg uppercase tracking-tighter flex items-center justify-center h-full">{config.heroLabel}</span>}
+                        {config?.footerLogoUrl ? <img src={config.footerLogoUrl} className="w-full h-full object-contain" /> : <span className="font-black text-white text-lg uppercase tracking-tighter flex items-center justify-center h-full">{config?.heroLabel || 'Hélio Júnior'}</span>}
                     </div>
-                    <p className="text-gray-400 text-sm italic max-w-sm mx-auto md:mx-0">"{config.heroSubtitle}"</p>
+                    <p className="text-gray-400 text-sm italic max-w-sm mx-auto md:mx-0">"{config?.heroSubtitle || ''}"</p>
                 </div>
 
                 <div className="md:col-span-2 space-y-6 text-center md:text-left">
@@ -168,8 +179,8 @@ const Footer: React.FC<{ config: SiteConfig, setCurrentView: (v: ViewState) => v
                 <div className="md:col-span-3 space-y-6 text-center md:text-left">
                     <h3 className="text-white font-black uppercase tracking-widest text-[10px] mb-8">Fale Conosco</h3>
                     <div className="space-y-4">
-                        <div className="flex items-center gap-3 text-sm text-gray-400"><MapPin size={16}/> <span>{config.address}</span></div>
-                        <div className="flex items-center gap-3 text-sm text-gray-400"><PhoneCall size={16}/> <span className="font-bold">{config.phone}</span></div>
+                        <div className="flex items-center gap-3 text-sm text-gray-400"><MapPin size={16}/> <span>{config?.address || 'Endereço não definido'}</span></div>
+                        <div className="flex items-center gap-3 text-sm text-gray-400"><PhoneCall size={16}/> <span className="font-bold">{config?.phone || ''}</span></div>
                     </div>
                 </div>
 
@@ -204,32 +215,43 @@ const App: React.FC = () => {
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
     
+    // Estados para os inputs de conexão fixos
+    const [supUrlInput, setSupUrlInput] = useState(localStorage.getItem('supabase_url_manual') || '');
+    const [supKeyInput, setSupKeyInput] = useState(localStorage.getItem('supabase_key_manual') || '');
+
     const audioContextRef = useRef<AudioContext | null>(null);
     const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-    const supUrlRef = useRef<HTMLInputElement>(null);
-    const supKeyRef = useRef<HTMLInputElement>(null);
     const adContentRef = useRef<HTMLTextAreaElement>(null);
     const adTitleRef = useRef<HTMLInputElement>(null);
 
     const refresh = async () => {
-        setIsOnline(isSupabaseReady());
-        const [p, u, c, cfg] = await Promise.all([
-            storageService.getPosts(),
-            storageService.getUsers(),
-            storageService.getCategories(),
-            storageService.getConfig()
-        ]);
-        setPosts(p); setAllUsers(u); setCategories(c); setSiteConfig(cfg); 
-        setPlans(storageService.getPlans());
-        
-        const session = getFromLocal(STORAGE_KEYS.SESSION, null);
-        if (session) {
-            const freshUser = u.find(user => user.id === session.id);
-            if (freshUser) { setCurrentUser(freshUser); saveToLocal(STORAGE_KEYS.SESSION, freshUser); }
-            else if (session.role === UserRole.ADMIN) { setCurrentUser(session); }
+        try {
+            setIsOnline(isSupabaseReady());
+            const [p, u, c, cfg] = await Promise.all([
+                storageService.getPosts(),
+                storageService.getUsers(),
+                storageService.getCategories(),
+                storageService.getConfig()
+            ]);
+            setPosts(p || []); setAllUsers(u || []); setCategories(c || []); setSiteConfig(cfg || DEFAULT_CONFIG); 
+            setPlans(storageService.getPlans());
+            
+            const session = getFromLocal(STORAGE_KEYS.SESSION, null);
+            if (session) {
+                const freshUser = (u || []).find((user: any) => user.id === session.id);
+                if (freshUser) { 
+                    setCurrentUser(freshUser); 
+                    saveToLocal(STORAGE_KEYS.SESSION, freshUser); 
+                } else {
+                    setCurrentUser(session);
+                }
+            }
+        } catch (e) {
+            console.error("Erro no refresh:", e);
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     useEffect(() => { 
@@ -242,13 +264,17 @@ const App: React.FC = () => {
     }, []);
 
     const handleLogin = (user: User) => {
+        if (!user) return;
+        setCurrentUser(user);
         saveToLocal(STORAGE_KEYS.SESSION, user);
-        refresh().then(() => { setCurrentView(user.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD'); });
+        setCurrentView(user.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD');
+        refresh();
     };
 
     const handleLogout = () => {
         localStorage.removeItem(STORAGE_KEYS.SESSION);
-        setCurrentUser(null); setCurrentView('HOME');
+        setCurrentUser(null); 
+        setCurrentView('HOME');
     };
 
     const handleConfirmPayment = async (user: User) => {
@@ -276,12 +302,17 @@ const App: React.FC = () => {
             return;
         }
         setIsGeneratingAI(true);
-        const copy = await generateAdCopy(profession, title, type);
-        if (adContentRef.current) {
-            adContentRef.current.value = copy;
+        try {
+            const copy = await generateAdCopy(profession, title, type);
+            if (adContentRef.current) {
+                adContentRef.current.value = copy;
+            }
+            setToast({ m: type === 'short' ? "Copy Gerada!" : "Script de Rádio Gerado!", t: "success" });
+        } catch (e) {
+            setToast({ m: "Erro ao gerar texto com IA.", t: "error" });
+        } finally {
+            setIsGeneratingAI(false);
         }
-        setIsGeneratingAI(false);
-        setToast({ m: type === 'short' ? "Copy Gerada!" : "Script de Rádio Gerado!", t: "success" });
     };
 
     const handleListenLocution = async () => {
@@ -292,11 +323,9 @@ const App: React.FC = () => {
         }
 
         setIsGeneratingAudio(true);
-        const base64Audio = await generateAudioTTS(text);
-        setIsGeneratingAudio(false);
-
-        if (base64Audio) {
-            try {
+        try {
+            const base64Audio = await generateAudioTTS(text);
+            if (base64Audio) {
                 if (!audioContextRef.current) {
                     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
                 }
@@ -311,18 +340,20 @@ const App: React.FC = () => {
                 source.start();
                 audioSourceRef.current = source;
                 setToast({ m: "Ouvindo Locução Digital...", t: "success" });
-            } catch (err) {
-                console.error("Erro ao reproduzir áudio:", err);
-                setToast({ m: "Erro ao tocar o áudio", t: "error" });
+            } else {
+                setToast({ m: "Não foi possível gerar a voz no momento.", t: "error" });
             }
-        } else {
-            setToast({ m: "Não foi possível gerar a voz no momento.", t: "error" });
+        } catch (err) {
+            console.error("Erro ao reproduzir áudio:", err);
+            setToast({ m: "Erro ao tocar o áudio", t: "error" });
+        } finally {
+            setIsGeneratingAudio(false);
         }
     };
 
     const handleSaveSupabaseManual = () => {
-        const url = supUrlRef.current?.value?.trim() || '';
-        const key = supKeyRef.current?.value?.trim() || '';
+        const url = supUrlInput.trim();
+        const key = supKeyInput.trim();
         if (reinitializeSupabase(url, key)) {
             setToast({ m: "Credenciais Supabase Salvas! Reiniciando...", t: "success" });
         } else {
@@ -338,6 +369,18 @@ const App: React.FC = () => {
     };
 
     const renderView = () => {
+        if (!currentUser && (currentView === 'DASHBOARD' || currentView === 'ADMIN' || currentView === 'PAYMENT')) {
+           return (
+               <div className="flex-1 flex flex-col items-center justify-center py-40">
+                   <Loader2 size={48} className="animate-spin text-brand-primary mb-4" />
+                   <div className="flex flex-col items-center gap-2">
+                       <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Carregando sua conta...</p>
+                       <button onClick={() => setCurrentView('LOGIN')} className="text-brand-primary text-[10px] font-black uppercase underline mt-4">Voltar ao Login se demorar</button>
+                   </div>
+               </div>
+           );
+        }
+
         switch(currentView) {
             case 'HOME':
                 const visiblePosts = posts.filter(p => {
@@ -352,16 +395,16 @@ const App: React.FC = () => {
                             <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 via-brand-dark to-brand-secondary/5" />
                             <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
                                 <div className="text-center lg:text-left">
-                                    <div className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black text-brand-accent uppercase tracking-widest mb-6">{siteConfig.heroLabel}</div>
-                                    <h1 className="text-5xl md:text-7xl font-black text-white mb-6 uppercase tracking-tighter leading-none">{siteConfig.heroTitle}</h1>
-                                    <p className="text-xl text-gray-400 mb-10 italic">"{siteConfig.heroSubtitle}"</p>
+                                    <div className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black text-brand-accent uppercase tracking-widest mb-6">{siteConfig?.heroLabel || 'Hélio Júnior'}</div>
+                                    <h1 className="text-5xl md:text-7xl font-black text-white mb-6 uppercase tracking-tighter leading-none">{siteConfig?.heroTitle || 'Portal de Anúncios'}</h1>
+                                    <p className="text-xl text-gray-400 mb-10 italic">"{siteConfig?.heroSubtitle || ''}"</p>
                                     <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
                                         <Button onClick={() => document.getElementById('ads')?.scrollIntoView({behavior:'smooth'})}>Ver Anúncios</Button>
                                         <Button variant="outline" onClick={() => setCurrentView('REGISTER')}>Quero Anunciar</Button>
                                     </div>
                                 </div>
                                 <div className="aspect-video rounded-[40px] overflow-hidden border border-white/10 shadow-2xl relative group">
-                                    <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Banner" />
+                                    <img src={siteConfig?.heroImageUrl || ''} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Banner" />
                                     <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/60 to-transparent" />
                                 </div>
                             </div>
@@ -439,7 +482,6 @@ const App: React.FC = () => {
                                     <div className="glass-panel p-8 rounded-[40px] border border-white/5 space-y-6">
                                         <div className="flex items-center gap-3"><Database className="text-brand-primary" size={20} /><h3 className="text-xs font-black uppercase text-white">Configuração do Supabase</h3></div>
                                         
-                                        {/* Diagnostic Console */}
                                         <div className="bg-black/80 rounded-2xl p-6 border border-white/10 font-mono">
                                             <p className="text-[10px] text-gray-500 uppercase font-black mb-3 flex items-center gap-2"><Activity size={12}/> Console de Diagnóstico</p>
                                             <div className="space-y-1">
@@ -453,19 +495,19 @@ const App: React.FC = () => {
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <label className="text-[9px] font-black text-gray-500 uppercase ml-2">URL do Projeto</label>
+                                                <label className="text-[9px] font-black text-gray-500 uppercase ml-2">URL do Projeto (Sempre Fixa)</label>
                                                 <input 
-                                                    ref={supUrlRef} 
-                                                    defaultValue={localStorage.getItem('supabase_url_manual') || ''} 
+                                                    value={supUrlInput} 
+                                                    onChange={e => setSupUrlInput(e.target.value)}
                                                     placeholder="https://sua-url.supabase.co" 
                                                     className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-[11px] text-white outline-none focus:border-brand-primary" 
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-[9px] font-black text-gray-500 uppercase ml-2">Anon Key (Public)</label>
+                                                <label className="text-[9px] font-black text-gray-500 uppercase ml-2">Anon Key (Sempre Fixa)</label>
                                                 <input 
-                                                    ref={supKeyRef} 
-                                                    defaultValue={localStorage.getItem('supabase_key_manual') || ''} 
+                                                    value={supKeyInput} 
+                                                    onChange={e => setSupKeyInput(e.target.value)}
                                                     placeholder="eyJhbGciOiJIUzI1NiIsInR5..." 
                                                     className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-[11px] text-white outline-none focus:border-brand-primary" 
                                                 />
@@ -480,14 +522,14 @@ const App: React.FC = () => {
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                         <div className="glass-panel p-8 rounded-[40px] space-y-6">
                                             <h3 className="text-xs font-black uppercase text-white"><Globe size={16} className="inline mr-2"/> Conteúdos do Site</h3>
-                                            <input value={siteConfig.heroLabel} onChange={e => setSiteConfig({...siteConfig, heroLabel: e.target.value})} placeholder="Nome da Marca" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
-                                            <input value={siteConfig.heroTitle} onChange={e => setSiteConfig({...siteConfig, heroTitle: e.target.value})} placeholder="Título Hero" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-black text-white" />
-                                            <textarea value={siteConfig.heroSubtitle} onChange={e => setSiteConfig({...siteConfig, heroSubtitle: e.target.value})} placeholder="Subtítulo Hero" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-gray-400 h-24" />
+                                            <input value={siteConfig?.heroLabel || ''} onChange={e => setSiteConfig({...siteConfig, heroLabel: e.target.value})} placeholder="Nome da Marca" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
+                                            <input value={siteConfig?.heroTitle || ''} onChange={e => setSiteConfig({...siteConfig, heroTitle: e.target.value})} placeholder="Título Hero" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-black text-white" />
+                                            <textarea value={siteConfig?.heroSubtitle || ''} onChange={e => setSiteConfig({...siteConfig, heroSubtitle: e.target.value})} placeholder="Subtítulo Hero" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-gray-400 h-24" />
                                         </div>
                                         <div className="glass-panel p-8 rounded-[40px] space-y-6">
                                             <h3 className="text-xs font-black uppercase text-white"><DollarSign size={16} className="inline mr-2"/> Dados Financeiros (PIX)</h3>
-                                            <input value={siteConfig.pixKey || ''} onChange={e => setSiteConfig({...siteConfig, pixKey: e.target.value})} placeholder="Sua Chave PIX" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
-                                            <input value={siteConfig.pixName || ''} onChange={e => setSiteConfig({...siteConfig, pixName: e.target.value})} placeholder="Nome do Titular" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
+                                            <input value={siteConfig?.pixKey || ''} onChange={e => setSiteConfig({...siteConfig, pixKey: e.target.value})} placeholder="Sua Chave PIX" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
+                                            <input value={siteConfig?.pixName || ''} onChange={e => setSiteConfig({...siteConfig, pixName: e.target.value})} placeholder="Nome do Titular" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
                                         </div>
                                     </div>
                                     <div className="fixed bottom-10 right-10 z-[110]"><Button onClick={() => storageService.updateConfig(siteConfig).then(() => { refresh(); setToast({m: "Alterações Salvas na Nuvem!", t: "success"}) })} className="h-20 w-64 shadow-2xl rounded-3xl"><CheckCircle2 /> SALVAR GERAL</Button></div>
@@ -552,6 +594,9 @@ const App: React.FC = () => {
                                     if(!imgVal) { setToast({m: "Selecione uma imagem para o anúncio!", t: "error"}); return; }
                                     await storageService.addPost({ id: 'p-'+Date.now(), authorId: currentUser.id, authorName: currentUser.name, category: currentUser.profession || 'Geral', title: form.title.value, content: form.content.value, imageUrl: imgVal, whatsapp: currentUser.phone, phone: currentUser.phone, createdAt: new Date().toISOString() });
                                     refresh(); setToast({m: "Anúncio Publicado!", t: "success"}); form.reset();
+                                    const pr = document.getElementById('postImgPreview') as HTMLImageElement;
+                                    if (pr) pr.classList.add('hidden');
+                                    document.getElementById('postImgPlaceholder')?.classList.remove('hidden');
                                 }} className="space-y-6">
                                     <input ref={adTitleRef} name="title" required placeholder="Título do Anúncio" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary font-bold" />
                                     <textarea ref={adContentRef} name="content" required placeholder="Descrição ou script..." className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white h-40 outline-none focus:border-brand-primary text-sm" />
@@ -576,10 +621,10 @@ const App: React.FC = () => {
                         </div>
                         <div className="lg:col-span-4 glass-panel p-8 rounded-[40px] text-center h-fit sticky top-24 border border-brand-accent/20">
                             <h3 className="font-black text-xl mb-4 text-brand-accent uppercase">Minha Conta</h3>
-                            <div className={`p-4 rounded-2xl border mb-6 text-[10px] font-black uppercase tracking-widest ${currentUser.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500/30 text-green-400 bg-green-500/5' : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5'}`}>
-                                STATUS: {currentUser.paymentStatus}
+                            <div className={`p-4 rounded-2xl border mb-6 text-[10px] font-black uppercase tracking-widest ${currentUser?.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500/30 text-green-400 bg-green-500/5' : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5'}`}>
+                                STATUS: {currentUser?.paymentStatus || '...'}
                             </div>
-                            {currentUser.expiresAt && (
+                            {currentUser?.expiresAt && (
                                 <div className="text-[10px] text-gray-500 font-bold uppercase mb-6">Assinatura até: {new Date(currentUser.expiresAt).toLocaleDateString()}</div>
                             )}
                             <Button onClick={() => setCurrentView('PAYMENT')} variant="secondary" className="w-full py-4 text-[10px] font-black uppercase tracking-widest">Mudar de Plano</Button>
@@ -594,10 +639,11 @@ const App: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
                             {plans.map(p => (
                                 <div key={p.id} onClick={() => {
+                                    if (!currentUser) return;
                                     const isFree = p.price === 0;
                                     let expiresAt = undefined;
                                     if(isFree) { const d = new Date(); d.setDate(d.getDate() + p.durationDays); expiresAt = d.toISOString(); }
-                                    storageService.updateUser({ ...currentUser!, planId: p.id, paymentStatus: isFree ? PaymentStatus.CONFIRMED : PaymentStatus.AWAITING, expiresAt }).then(() => { refresh(); setToast({m: isFree ? "Degustação Iniciada! Aproveite." : "Plano Selecionado! Aguardando PIX...", t: "success"}); if(isFree) setCurrentView('DASHBOARD'); });
+                                    storageService.updateUser({ ...currentUser, planId: p.id, paymentStatus: isFree ? PaymentStatus.CONFIRMED : PaymentStatus.AWAITING, expiresAt }).then(() => { refresh(); setToast({m: isFree ? "Degustação Iniciada! Aproveite." : "Plano Selecionado! Aguardando PIX...", t: "success"}); if(isFree) setCurrentView('DASHBOARD'); });
                                 }} className={`glass-panel p-10 rounded-[40px] border-2 transition-all cursor-pointer group flex flex-col justify-between ${currentUser?.planId === p.id ? 'border-brand-primary' : 'border-white/5 hover:border-brand-primary/40'}`}>
                                     <div>
                                         <h3 className="font-black uppercase mb-4 text-white text-sm">{p.name}</h3>
@@ -612,8 +658,8 @@ const App: React.FC = () => {
                             <div className="max-w-2xl mx-auto glass-panel p-10 rounded-[40px] border border-brand-accent/30 text-left">
                                 <h3 className="text-xl font-black text-white uppercase mb-6 text-center">Finalize o Pagamento</h3>
                                 <div className="space-y-4">
-                                    <div className="bg-brand-dark p-4 rounded-xl border border-white/10"><p className="text-[10px] text-gray-500 uppercase mb-1">Chave PIX</p><p className="font-black text-white select-all">{siteConfig.pixKey}</p></div>
-                                    <div className="bg-brand-dark p-4 rounded-xl border border-white/10"><p className="text-[10px] text-gray-500 uppercase mb-1">Titular da Conta</p><p className="font-black text-white">{siteConfig.pixName}</p></div>
+                                    <div className="bg-brand-dark p-4 rounded-xl border border-white/10"><p className="text-[10px] text-gray-500 uppercase mb-1">Chave PIX</p><p className="font-black text-white select-all">{siteConfig?.pixKey || ''}</p></div>
+                                    <div className="bg-brand-dark p-4 rounded-xl border border-white/10"><p className="text-[10px] text-gray-500 uppercase mb-1">Titular da Conta</p><p className="font-black text-white">{siteConfig?.pixName || ''}</p></div>
                                     <p className="text-[10px] text-gray-500 font-bold italic text-center">Envie o comprovante para o Hélio após o pagamento.</p>
                                 </div>
                             </div>
@@ -624,19 +670,30 @@ const App: React.FC = () => {
             case 'LOGIN':
             case 'REGISTER':
                 return (
-                    <div className="pt-40 pb-20 max-md mx-auto px-4 animate-in zoom-in">
+                    <div className="pt-40 pb-20 max-w-md mx-auto px-4 animate-in zoom-in">
                         <div className="glass-panel p-10 rounded-[40px] shadow-2xl border border-white/5">
                             <h2 className="text-4xl font-black text-center mb-8 uppercase tracking-tighter text-white">{currentView === 'LOGIN' ? 'Bem-vindo' : 'Criar Conta'}</h2>
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
                                 const form = e.target as any;
                                 const email = form.email.value;
-                                if (currentView === 'LOGIN') {
-                                    const user = await storageService.findUserByEmail(email);
-                                    if (user) handleLogin(user); else setToast({ m: "Conta não encontrada.", t: "error"});
-                                } else {
-                                    const u = await storageService.addUser({ name: form.name.value, email: email.toLowerCase(), role: UserRole.ADVERTISER, profession: form.profession.value, phone: form.phone.value, paymentStatus: PaymentStatus.AWAITING });
-                                    handleLogin(u);
+                                try {
+                                    if (currentView === 'LOGIN') {
+                                        const user = await storageService.findUserByEmail(email);
+                                        if (user) handleLogin(user); else setToast({ m: "Conta não encontrada.", t: "error"});
+                                    } else {
+                                        const u = await storageService.addUser({ 
+                                            name: form.name.value, 
+                                            email: email.toLowerCase(), 
+                                            role: UserRole.ADVERTISER, 
+                                            profession: form.profession.value, 
+                                            phone: form.phone.value, 
+                                            paymentStatus: PaymentStatus.AWAITING 
+                                        });
+                                        handleLogin(u);
+                                    }
+                                } catch (err) {
+                                    setToast({ m: "Ocorreu um erro inesperado.", t: "error" });
                                 }
                             }} className="space-y-4">
                                 {currentView === 'REGISTER' && (
