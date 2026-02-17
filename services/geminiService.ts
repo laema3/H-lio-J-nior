@@ -4,22 +4,68 @@ import { GoogleGenAI, Modality } from "@google/genai";
 /**
  * Gera copy para o anúncio ou um script de rádio
  */
-export const generateAdCopy = async (profession: string, keywords: string, type: 'short' | 'radio' = 'short'): Promise<string> => {
+export const generateAdCopy = async (profession: string, keywords: string, type: 'short' | 'radio' = 'short'): Promise<{title: string, content: string} | string> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = type === 'short' 
-      ? `Escreva um anúncio curto (50 palavras), persuasivo e profissional para um site de classificados. Profissão: ${profession}. Palavras-chave: ${keywords}. Tom vibrante.`
-      : `Escreva um SPOT DE RÁDIO de 30 segundos. Inclua indicações de [Trilha] e [Locutor]. Seja extremamente persuasivo. Profissão: ${profession}. Negócio: ${keywords}. Tom de rádio profissional.`;
+    if (type === 'short') {
+      const prompt = `Crie um anúncio de impacto para um portal de classificados. 
+      Profissão/Ramo: ${profession}. 
+      Contexto: ${keywords}. 
+      Retorne APENAS um JSON no formato: {"title": "Título chamativo", "content": "Descrição persuasiva de até 60 palavras"}`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-    });
-    return response.text?.trim() || "Não foi possível gerar o texto no momento.";
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+      
+      try {
+        return JSON.parse(response.text || "{}");
+      } catch {
+        return { title: "Novo Anúncio", content: response.text || "" };
+      }
+    } else {
+      const prompt = `Escreva um SPOT DE RÁDIO de 30 segundos. Inclua indicações de [Trilha] e [Locutor]. Seja extremamente persuasivo. Profissão: ${profession}. Negócio: ${keywords}. Tom de rádio profissional.`;
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+      });
+      return response.text?.trim() || "Não foi possível gerar o texto no momento.";
+    }
   } catch (error) {
     console.error("Erro ao gerar anúncio com Gemini:", error);
     return "Erro ao conectar com a IA Inteligente.";
+  }
+};
+
+/**
+ * Gera uma imagem publicitária baseada na descrição do anúncio
+ */
+export const generateAdImage = async (prompt: string): Promise<string | undefined> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const imagePrompt = `Uma fotografia publicitária profissional, estilo estúdio ou ambiente realístico de alta qualidade, para: ${prompt}. Iluminação cinematográfica, foco nítido, cores vibrantes, composição limpa para anúncio.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: { parts: [{ text: imagePrompt }] },
+      config: {
+        imageConfig: {
+          aspectRatio: "16:9"
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    return undefined;
+  } catch (error) {
+    console.error("Erro ao gerar imagem IA:", error);
+    return undefined;
   }
 };
 

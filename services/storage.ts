@@ -169,6 +169,14 @@ export const storageService = {
     }
   },
 
+  async updatePost(updatedPost: Post) {
+    const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
+    saveToLocal(STORAGE_KEYS.POSTS, posts.map((p: Post) => p.id === updatedPost.id ? updatedPost : p));
+    if (isSupabaseReady()) {
+        try { await db.updatePost(updatedPost); } catch (e) { console.error("Erro updatePost:", e); }
+    }
+  },
+
   async deletePost(id: string) {
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, posts.filter((p: Post) => p.id !== id));

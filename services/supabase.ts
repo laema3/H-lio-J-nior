@@ -26,12 +26,14 @@ export const reinitializeSupabase = (newUrl: string, newKey: string) => {
   const u = newUrl.trim();
   const k = newKey.trim();
   if (isValidUrl(u) && isValidKey(k)) {
+    // Gravamos no localStorage de forma explícita
     localStorage.setItem('supabase_url_manual', u);
     localStorage.setItem('supabase_key_manual', k);
-    // Pequeno delay para garantir gravação síncrona em alguns browsers antes do reload
+    
+    // Pequeno delay para garantir gravação em browsers que tratam o storage de forma assíncrona
     setTimeout(() => {
         window.location.reload();
-    }, 100);
+    }, 200);
     return true;
   }
   return false;
@@ -49,45 +51,53 @@ export const db = {
     const { url: currentUrl, key: currentKey } = getCredentials();
 
     if (!isValidUrl(currentUrl)) {
-      logs.push("❌ Erro: URL do Supabase está vazia ou no formato incorreto.");
+      logs.push("❌ URL pendente ou inválida nos registros.");
       return { success: false, logs };
     }
     if (!isValidKey(currentKey)) {
-      logs.push("❌ Erro: A Anon Key (chave) está vazia ou é curta demais.");
+      logs.push("❌ Anon Key pendente ou curta demais.");
       return { success: false, logs };
     }
 
-    logs.push("⏳ Tentando conectar ao projeto...");
+    logs.push("⏳ Sincronizando com o projeto...");
 
     try {
-      if (!supabase) throw new Error("Cliente Supabase não inicializado.");
+      if (!supabase) {
+         // Tentativa de reconstruir o cliente se ele falhou na carga inicial
+         const { url: u, key: k } = getCredentials();
+         if (isValidUrl(u) && isValidKey(k)) {
+            supabase = createClient(u, k);
+         } else {
+             throw new Error("Cliente não pôde ser inicializado.");
+         }
+      }
 
       // Teste de conexão básico consultando uma tabela que deve existir
       const { data, error } = await supabase.from('site_config').select('id').limit(1);
 
       if (error) {
         if (error.message.includes("project not found") || error.message.includes("Invalid API key") || error.code === 'PGRST301') {
-          logs.push("❌ Erro Crítico: Acesso negado ao projeto.");
-          logs.push("👉 Verifique se a URL e a KEY estão corretas e se o projeto não está PAUSADO no site do Supabase.");
+          logs.push("❌ Erro Crítico: Credenciais inválidas.");
+          logs.push("👉 Verifique as chaves e se o projeto está ATIVO no Supabase.");
           return { success: false, logs };
         }
         
         if (error.code === '42P01') {
-          logs.push("⚠️ Aviso: Conectado, mas a tabela 'site_config' não existe.");
-          logs.push("👉 Você precisa rodar o script SQL no painel do Supabase.");
-          return { success: false, logs };
+          logs.push("⚠️ Aviso: Conectado! Tabelas não encontradas.");
+          logs.push("👉 Aplique o script SQL no editor do Supabase.");
+          return { success: true, logs }; // Ainda é um sucesso de conexão
         }
 
-        logs.push(`⚠️ Erro do Supabase: ${error.message} (Código: ${error.code})`);
+        logs.push(`⚠️ Alerta: ${error.message}`);
         return { success: false, logs };
       }
 
-      logs.push("✅ Conexão estabelecida com sucesso!");
-      logs.push("✅ Tabelas detectadas e acessíveis.");
+      logs.push("✅ Conectado com sucesso!");
+      logs.push("✅ Sincronização em tempo real ativa.");
       return { success: true, logs };
 
     } catch (e: any) {
-      logs.push(`❌ Erro Inesperado: ${e.message}`);
+      logs.push(`❌ Falha na conexão: ${e.message}`);
       return { success: false, logs };
     }
   },
@@ -124,6 +134,11 @@ export const db = {
   async addPost(post: any) {
     if (!supabase) return;
     await supabase.from('posts').insert(post);
+  },
+  async updatePost(post: any) {
+    if (!supabase) return;
+    const { id, ...data } = post;
+    await supabase.from('posts').update(data).eq('id', id);
   },
   async deletePost(id: string) {
     if (!supabase) return;

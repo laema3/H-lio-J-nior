@@ -6,13 +6,13 @@ import { storageService, STORAGE_KEYS, getFromLocal, saveToLocal, DEFAULT_CONFIG
 import { db, isSupabaseReady, reinitializeSupabase, clearSupabaseCredentials } from './services/supabase';
 import { Button } from './components/Button';
 import { PostCard } from './components/PostCard';
-import { chatWithAssistant, generateAdCopy, generateAudioTTS } from './services/geminiService';
+import { chatWithAssistant, generateAdCopy, generateAudioTTS, generateAdImage } from './services/geminiService';
 import { 
-    Check, Clock, Camera, Trash2, AlertTriangle, Plus, Settings, CreditCard, Tag,
+    Check, Clock, Camera, Trash2, Edit, AlertTriangle, Plus, Settings, CreditCard, Tag,
     MessageCircle, Send, X, Bot, Loader2, Sparkles, Volume2, Play, Pause,
     Image as ImageIcon, Users, CheckCircle2, Layers, MapPin, PhoneCall,
     Database, Activity, Globe, LayoutDashboard, LogOut, Eye, DollarSign, UploadCloud, Info,
-    Radio, RefreshCcw
+    Radio, RefreshCcw, ChevronLeft, ChevronRight, Wand2
 } from 'lucide-react';
 
 type AdminSubView = 'INICIO' | 'CLIENTES' | 'PAGAMENTOS' | 'ANUNCIOS' | 'CATEGORIAS' | 'PLANOS' | 'AJUSTES';
@@ -80,6 +80,61 @@ const Toast: React.FC<{ message: string, type: 'success' | 'error', onClose: () 
         }`}>
             {type === 'success' ? <Check size={20} /> : <AlertTriangle size={20} />}
             <span className="font-bold text-sm uppercase tracking-wider">{message}</span>
+        </div>
+    );
+};
+
+const AdSlider: React.FC<{ ads: Post[], allUsers: User[] }> = ({ ads, allUsers }) => {
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => {
+        if (ads.length <= 1) return;
+        const interval = setInterval(() => {
+            setCurrentIndex(prev => (prev + 1) % ads.length);
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [ads.length]);
+
+    if (ads.length === 0) return null;
+
+    const currentAd = ads[currentIndex];
+    
+    return (
+        <div className="relative w-full overflow-hidden glass-panel rounded-[40px] border border-white/10 shadow-2xl group min-h-[400px]">
+            <div className="flex transition-transform duration-700 ease-in-out h-full" style={{ transform: `translateX(-${currentIndex * 100}%)` }}>
+                {ads.map((ad, idx) => (
+                    <div key={ad.id} className="w-full shrink-0 flex flex-col md:flex-row h-full min-h-[400px]">
+                        <div className="w-full md:w-1/2 h-64 md:h-auto bg-black relative">
+                            <img src={ad.imageUrl} className="w-full h-full object-contain" alt={ad.title} />
+                            <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/40 to-transparent pointer-events-none" />
+                        </div>
+                        <div className="w-full md:w-1/2 p-10 flex flex-col justify-center">
+                            <div className="flex items-center gap-3 mb-4">
+                                <span className="bg-brand-primary/20 text-brand-primary text-[10px] font-black uppercase px-3 py-1 rounded-full border border-brand-primary/20">{ad.category}</span>
+                                <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">{ad.authorName}</span>
+                            </div>
+                            <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">{ad.title}</h2>
+                            <p className="text-gray-400 text-sm italic mb-10 line-clamp-4">"{ad.content}"</p>
+                            <div className="flex gap-4">
+                                <Button onClick={() => ad.whatsapp && window.open(`https://wa.me/${ad.whatsapp.replace(/\D/g,'')}`, '_blank')} className="flex-1 uppercase text-[10px] h-14">Falar no WhatsApp</Button>
+                                <Button variant="outline" onClick={() => ad.phone && window.open(`tel:${ad.phone}`)} className="flex-1 uppercase text-[10px] h-14">Ligar Agora</Button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {ads.length > 1 && (
+                <>
+                    <button onClick={() => setCurrentIndex(prev => (prev - 1 + ads.length) % ads.length)} className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"><ChevronLeft size={24}/></button>
+                    <button onClick={() => setCurrentIndex(prev => (prev + 1) % ads.length)} className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"><ChevronRight size={24}/></button>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+                        {ads.map((_, idx) => (
+                            <button key={idx} onClick={() => setCurrentIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${idx === currentIndex ? 'bg-brand-primary w-8' : 'bg-white/20'}`} />
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 };
@@ -203,6 +258,7 @@ const App: React.FC = () => {
     const [isOnline, setIsOnline] = useState(false);
     const [connLogs, setConnLogs] = useState<string[]>([]);
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+    const [isGeneratingImageAI, setIsGeneratingImageAI] = useState(false);
     const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
     const [adminSubView, setAdminSubView] = useState<AdminSubView>('INICIO');
@@ -215,13 +271,15 @@ const App: React.FC = () => {
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
     
-    // Estados para os inputs de conexão fixos
-    const [supUrlInput, setSupUrlInput] = useState(localStorage.getItem('supabase_url_manual') || '');
-    const [supKeyInput, setSupKeyInput] = useState(localStorage.getItem('supabase_key_manual') || '');
+    // Estados para o Gerador Mágico
+    const [magicPrompt, setMagicPrompt] = useState('');
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
+
+    const [supUrlInput, setSupUrlInput] = useState(() => localStorage.getItem('supabase_url_manual') || '');
+    const [supKeyInput, setSupKeyInput] = useState(() => localStorage.getItem('supabase_key_manual') || '');
 
     const audioContextRef = useRef<AudioContext | null>(null);
     const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
-
     const adContentRef = useRef<HTMLTextAreaElement>(null);
     const adTitleRef = useRef<HTMLInputElement>(null);
 
@@ -247,11 +305,7 @@ const App: React.FC = () => {
                     setCurrentUser(session);
                 }
             }
-        } catch (e) {
-            console.error("Erro no refresh:", e);
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (e) { console.error("Erro no refresh:", e); } finally { setIsLoading(false); }
     };
 
     useEffect(() => { 
@@ -262,6 +316,22 @@ const App: React.FC = () => {
             setConnLogs(conn.logs);
         });
     }, []);
+
+    useEffect(() => {
+        if (editingPost) {
+            if (adTitleRef.current) adTitleRef.current.value = editingPost.title;
+            if (adContentRef.current) adContentRef.current.value = editingPost.content;
+            const pr = document.getElementById('postImgPreview') as HTMLImageElement;
+            const pl = document.getElementById('postImgPlaceholder');
+            const inp = document.getElementById('postImgInput') as HTMLInputElement;
+            if (pr && editingPost.imageUrl) {
+                pr.src = editingPost.imageUrl;
+                pr.classList.remove('hidden');
+                pl?.classList.add('hidden');
+                if (inp) inp.value = editingPost.imageUrl;
+            }
+        }
+    }, [editingPost]);
 
     const handleLogin = (user: User) => {
         if (!user) return;
@@ -279,119 +349,106 @@ const App: React.FC = () => {
 
     const handleConfirmPayment = async (user: User) => {
         const plan = plans.find(p => p.id === user.planId);
-        const duration = plan?.durationDays || 30;
         const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + duration);
-        
-        const updatedUser: User = {
-            ...user,
-            paymentStatus: PaymentStatus.CONFIRMED,
-            expiresAt: expiresAt.toISOString()
-        };
-        
+        expiresAt.setDate(expiresAt.getDate() + (plan?.durationDays || 30));
+        const updatedUser: User = { ...user, paymentStatus: PaymentStatus.CONFIRMED, expiresAt: expiresAt.toISOString() };
         await storageService.updateUser(updatedUser);
         await refresh();
-        setToast({ m: "Conta Ativada com Sucesso!", t: "success" });
+        setToast({ m: "Conta Ativada!", t: "success" });
+    };
+
+    const handleMagicGenerate = async () => {
+        if (!magicPrompt.trim()) {
+            setToast({ m: "Diga o que você quer anunciar!", t: "error" });
+            return;
+        }
+        setIsGeneratingAI(true);
+        setIsGeneratingImageAI(true);
+        try {
+            const profession = currentUser?.profession || 'Negócio';
+            const [textResult, imageResult] = await Promise.all([
+                generateAdCopy(profession, magicPrompt, 'short'),
+                generateAdImage(magicPrompt)
+            ]);
+
+            if (typeof textResult === 'object') {
+                if (adTitleRef.current) adTitleRef.current.value = textResult.title;
+                if (adContentRef.current) adContentRef.current.value = textResult.content;
+            }
+
+            if (imageResult) {
+                const pr = document.getElementById('postImgPreview') as HTMLImageElement;
+                const pl = document.getElementById('postImgPlaceholder');
+                const inp = document.getElementById('postImgInput') as HTMLInputElement;
+                if (pr) {
+                    pr.src = imageResult;
+                    pr.classList.remove('hidden');
+                    pl?.classList.add('hidden');
+                }
+                if (inp) inp.value = imageResult;
+            }
+            setToast({ m: "Anúncio Criado pela IA!", t: "success" });
+            setMagicPrompt('');
+        } catch (e) {
+            setToast({ m: "Erro na criação mágica.", t: "error" });
+        } finally {
+            setIsGeneratingAI(false);
+            setIsGeneratingImageAI(false);
+        }
     };
 
     const handleGenerateAI = async (type: 'short' | 'radio' = 'short') => {
         const title = adTitleRef.current?.value;
         const profession = currentUser?.profession || 'Profissional';
-        if (!title) {
-            setToast({ m: "Dê um título para o anúncio primeiro!", t: "error" });
-            return;
-        }
+        if (!title) { setToast({ m: "Dê um título primeiro!", t: "error" }); return; }
         setIsGeneratingAI(true);
         try {
-            const copy = await generateAdCopy(profession, title, type);
+            const res = await generateAdCopy(profession, title, type);
             if (adContentRef.current) {
-                adContentRef.current.value = copy;
+                adContentRef.current.value = typeof res === 'object' ? res.content : res;
             }
-            setToast({ m: type === 'short' ? "Copy Gerada!" : "Script de Rádio Gerado!", t: "success" });
-        } catch (e) {
-            setToast({ m: "Erro ao gerar texto com IA.", t: "error" });
-        } finally {
-            setIsGeneratingAI(false);
-        }
+            setToast({ m: "Texto Gerado!", t: "success" });
+        } catch (e) { setToast({ m: "Erro na IA.", t: "error" }); } finally { setIsGeneratingAI(false); }
     };
 
     const handleListenLocution = async () => {
         const text = adContentRef.current?.value;
-        if (!text) {
-            setToast({ m: "Gere ou escreva um texto primeiro!", t: "error" });
-            return;
-        }
-
+        if (!text) { setToast({ m: "Escreva algo primeiro!", t: "error" }); return; }
         setIsGeneratingAudio(true);
         try {
             const base64Audio = await generateAudioTTS(text);
             if (base64Audio) {
-                if (!audioContextRef.current) {
-                    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-                }
+                if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
                 const ctx = audioContextRef.current;
                 const audioBuffer = await decodeAudioData(decodeBase64(base64Audio), ctx, 24000, 1);
-                
                 if (audioSourceRef.current) audioSourceRef.current.stop();
-                
                 const source = ctx.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(ctx.destination);
                 source.start();
                 audioSourceRef.current = source;
                 setToast({ m: "Ouvindo Locução Digital...", t: "success" });
-            } else {
-                setToast({ m: "Não foi possível gerar a voz no momento.", t: "error" });
             }
-        } catch (err) {
-            console.error("Erro ao reproduzir áudio:", err);
-            setToast({ m: "Erro ao tocar o áudio", t: "error" });
-        } finally {
-            setIsGeneratingAudio(false);
-        }
+        } catch (err) { setToast({ m: "Erro no áudio", t: "error" }); } finally { setIsGeneratingAudio(false); }
     };
 
     const handleSaveSupabaseManual = () => {
-        const url = supUrlInput.trim();
-        const key = supKeyInput.trim();
-        if (reinitializeSupabase(url, key)) {
-            setToast({ m: "Credenciais Supabase Salvas! Reiniciando...", t: "success" });
-        } else {
-            setToast({ m: "Dados inválidos. Verifique URL e Chave.", t: "error" });
-        }
-    };
-
-    const handleTestSupabase = async () => {
-        setConnLogs(["⏳ Testando..."]);
-        const res = await db.testConnection();
-        setIsOnline(res.success);
-        setConnLogs(res.logs);
+        if (reinitializeSupabase(supUrlInput, supKeyInput)) setToast({ m: "Reiniciando...", t: "success" });
+        else setToast({ m: "Dados inválidos.", t: "error" });
     };
 
     const renderView = () => {
-        if (!currentUser && (currentView === 'DASHBOARD' || currentView === 'ADMIN' || currentView === 'PAYMENT')) {
-           return (
-               <div className="flex-1 flex flex-col items-center justify-center py-40">
-                   <Loader2 size={48} className="animate-spin text-brand-primary mb-4" />
-                   <div className="flex flex-col items-center gap-2">
-                       <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Carregando sua conta...</p>
-                       <button onClick={() => setCurrentView('LOGIN')} className="text-brand-primary text-[10px] font-black uppercase underline mt-4">Voltar ao Login se demorar</button>
-                   </div>
-               </div>
-           );
+        if (!currentUser && ['DASHBOARD', 'ADMIN', 'PAYMENT'].includes(currentView)) {
+           return <div className="flex-1 flex flex-col items-center justify-center py-40"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
         }
 
         switch(currentView) {
             case 'HOME':
-                const visiblePosts = posts.filter(p => {
-                    const auth = allUsers.find(u => u.id === p.authorId);
-                    if (p.authorId === 'admin') return true;
-                    return auth?.paymentStatus === PaymentStatus.CONFIRMED;
-                });
+                const visiblePosts = posts.filter(p => (p.authorId === 'admin' || allUsers.find(u => u.id === p.authorId)?.paymentStatus === PaymentStatus.CONFIRMED));
                 const filtered = filterCategory === 'ALL' ? visiblePosts : visiblePosts.filter(p => p.category === filterCategory);
                 return (
                     <div className="animate-in fade-in duration-700">
-                        <section className="relative pt-32 pb-20 overflow-hidden">
+                        <section className="relative pt-32 pb-12 overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 via-brand-dark to-brand-secondary/5" />
                             <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
                                 <div className="text-center lg:text-left">
@@ -409,47 +466,20 @@ const App: React.FC = () => {
                                 </div>
                             </div>
                         </section>
-
-                        <section className="max-w-7xl mx-auto px-4 mb-16 relative z-10">
+                        <section className="max-w-7xl mx-auto px-4 mb-20 relative z-10">
+                            <div className="mb-8">
+                                <h3 className="text-xs font-black text-brand-accent uppercase tracking-widest mb-4">Destaques da Semana</h3>
+                                <AdSlider ads={visiblePosts.slice(0, 5)} allUsers={allUsers} />
+                            </div>
                             <div className="flex flex-wrap justify-center gap-2">
                                 <button onClick={() => setFilterCategory('ALL')} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${filterCategory === 'ALL' ? 'bg-white text-brand-dark border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}>Todos</button>
                                 {categories.map(c => <button key={c} onClick={() => setFilterCategory(c)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${filterCategory === c ? 'bg-brand-primary text-white border-brand-primary shadow-lg shadow-brand-primary/20' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}>{c}</button>)}
                             </div>
                         </section>
-
                         <section id="ads" className="max-w-7xl mx-auto px-4 pb-24 min-h-[400px]">
                             {filtered.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {filtered.map(p => <PostCard key={p.id} post={p} author={allUsers.find(u => u.id === p.authorId)} />)}
-                                </div>
-                            ) : (
-                                <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5">
-                                    <ImageIcon size={48} className="mx-auto text-gray-600 mb-4 opacity-20" />
-                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Nenhum anúncio ativo no momento.</p>
-                                </div>
-                            )}
-                        </section>
-
-                        <section className="bg-brand-dark/50 py-24 border-t border-white/5">
-                            <div className="max-w-7xl mx-auto px-4 text-center">
-                                <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4">Escolha sua Exposição</h2>
-                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs mb-16">Planos que cabem no seu bolso com tecnologia de ponta</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                                    {plans.map(p => (
-                                        <div key={p.id} className="glass-panel p-10 rounded-[40px] border border-white/5 flex flex-col items-center hover:border-brand-primary transition-all group">
-                                            <div className="text-brand-accent font-black text-[10px] uppercase mb-4 tracking-widest">{p.name}</div>
-                                            <div className="text-4xl font-black text-white mb-2">R$ {p.price.toFixed(2)}</div>
-                                            <div className="text-[10px] text-gray-600 font-black uppercase mb-8">{p.durationDays} Dias de Ativação</div>
-                                            <ul className="space-y-3 mb-10 text-left w-full">
-                                                <li className="text-[10px] text-gray-400 flex items-center gap-2 font-bold uppercase"><Check size={14} className="text-green-500"/> Visibilidade no Portal</li>
-                                                <li className="text-[10px] text-gray-400 flex items-center gap-2 font-bold uppercase"><Check size={14} className="text-green-500"/> Gerador de Texto IA</li>
-                                                <li className="text-[10px] text-gray-400 flex items-center gap-2 font-bold uppercase"><Check size={14} className="text-green-500"/> Suporte Exclusivo</li>
-                                            </ul>
-                                            <Button onClick={() => setCurrentView('REGISTER')} className="w-full uppercase text-[10px]">Assinar Agora</Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{filtered.map(p => <PostCard key={p.id} post={p} author={allUsers.find(u => u.id === p.authorId)} />)}</div>
+                            ) : <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5"><ImageIcon size={48} className="mx-auto text-gray-600 mb-4 opacity-20" /><p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Nenhum anúncio ativo.</p></div>}
                         </section>
                     </div>
                 );
@@ -474,92 +504,40 @@ const App: React.FC = () => {
                         <main className="flex-1 p-10 overflow-y-auto">
                             {adminSubView === 'AJUSTES' && (
                                 <div className="space-y-12 animate-in fade-in pb-40">
-                                    <div className="flex justify-between items-center">
-                                        <h2 className="text-3xl font-black uppercase text-brand-accent tracking-tighter">Central de Comando</h2>
-                                        <Button onClick={clearSupabaseCredentials} variant="danger" className="text-[10px] uppercase h-10">Resetar Banco de Dados</Button>
-                                    </div>
-                                    
+                                    <div className="flex justify-between items-center"><h2 className="text-3xl font-black uppercase text-brand-accent tracking-tighter">Central de Comando</h2><Button onClick={clearSupabaseCredentials} variant="danger" className="text-[10px] uppercase h-10">Resetar DB</Button></div>
                                     <div className="glass-panel p-8 rounded-[40px] border border-white/5 space-y-6">
-                                        <div className="flex items-center gap-3"><Database className="text-brand-primary" size={20} /><h3 className="text-xs font-black uppercase text-white">Configuração do Supabase</h3></div>
-                                        
-                                        <div className="bg-black/80 rounded-2xl p-6 border border-white/10 font-mono">
-                                            <p className="text-[10px] text-gray-500 uppercase font-black mb-3 flex items-center gap-2"><Activity size={12}/> Console de Diagnóstico</p>
-                                            <div className="space-y-1">
-                                                {connLogs.length > 0 ? connLogs.map((log, i) => (
-                                                    <p key={i} className={`text-[11px] ${log.includes('✅') ? 'text-green-400' : log.includes('❌') ? 'text-red-400' : 'text-gray-400'}`}>
-                                                        {log}
-                                                    </p>
-                                                )) : <p className="text-[11px] text-gray-600">Aguardando teste...</p>}
-                                            </div>
-                                        </div>
-
+                                        <div className="flex items-center gap-3"><Database className="text-brand-primary" size={20} /><h3 className="text-xs font-black uppercase text-white">Configuração Supabase</h3></div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[9px] font-black text-gray-500 uppercase ml-2">URL do Projeto (Sempre Fixa)</label>
-                                                <input 
-                                                    value={supUrlInput} 
-                                                    onChange={e => setSupUrlInput(e.target.value)}
-                                                    placeholder="https://sua-url.supabase.co" 
-                                                    className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-[11px] text-white outline-none focus:border-brand-primary" 
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[9px] font-black text-gray-500 uppercase ml-2">Anon Key (Sempre Fixa)</label>
-                                                <input 
-                                                    value={supKeyInput} 
-                                                    onChange={e => setSupKeyInput(e.target.value)}
-                                                    placeholder="eyJhbGciOiJIUzI1NiIsInR5..." 
-                                                    className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-[11px] text-white outline-none focus:border-brand-primary" 
-                                                />
-                                            </div>
+                                            <input value={supUrlInput} onChange={e => setSupUrlInput(e.target.value)} placeholder="URL do Projeto" className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-[11px] text-white" />
+                                            <input value={supKeyInput} onChange={e => setSupKeyInput(e.target.value)} placeholder="Anon Key" className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-[11px] text-white" />
                                         </div>
-                                        <div className="flex gap-4">
-                                            <Button onClick={handleSaveSupabaseManual} className="flex-1 h-12 uppercase text-[10px]"><RefreshCcw size={14}/> Salvar e Reiniciar</Button>
-                                            <Button onClick={handleTestSupabase} variant="outline" className="flex-1 h-12 uppercase text-[10px]">Tentar Conectar Agora</Button>
-                                        </div>
+                                        <Button onClick={handleSaveSupabaseManual} className="w-full h-12 uppercase text-[10px]"><RefreshCcw size={14}/> Salvar e Reiniciar</Button>
                                     </div>
-
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <div className="glass-panel p-8 rounded-[40px] space-y-6">
-                                            <h3 className="text-xs font-black uppercase text-white"><Globe size={16} className="inline mr-2"/> Conteúdos do Site</h3>
-                                            <input value={siteConfig?.heroLabel || ''} onChange={e => setSiteConfig({...siteConfig, heroLabel: e.target.value})} placeholder="Nome da Marca" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
-                                            <input value={siteConfig?.heroTitle || ''} onChange={e => setSiteConfig({...siteConfig, heroTitle: e.target.value})} placeholder="Título Hero" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-black text-white" />
-                                            <textarea value={siteConfig?.heroSubtitle || ''} onChange={e => setSiteConfig({...siteConfig, heroSubtitle: e.target.value})} placeholder="Subtítulo Hero" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-gray-400 h-24" />
-                                        </div>
-                                        <div className="glass-panel p-8 rounded-[40px] space-y-6">
-                                            <h3 className="text-xs font-black uppercase text-white"><DollarSign size={16} className="inline mr-2"/> Dados Financeiros (PIX)</h3>
-                                            <input value={siteConfig?.pixKey || ''} onChange={e => setSiteConfig({...siteConfig, pixKey: e.target.value})} placeholder="Sua Chave PIX" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
-                                            <input value={siteConfig?.pixName || ''} onChange={e => setSiteConfig({...siteConfig, pixName: e.target.value})} placeholder="Nome do Titular" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white" />
-                                        </div>
-                                    </div>
-                                    <div className="fixed bottom-10 right-10 z-[110]"><Button onClick={() => storageService.updateConfig(siteConfig).then(() => { refresh(); setToast({m: "Alterações Salvas na Nuvem!", t: "success"}) })} className="h-20 w-64 shadow-2xl rounded-3xl"><CheckCircle2 /> SALVAR GERAL</Button></div>
+                                    <div className="fixed bottom-10 right-10 z-[110]"><Button onClick={() => storageService.updateConfig(siteConfig).then(() => { refresh(); setToast({m: "Salvo!", t: "success"}) })} className="h-20 w-64 shadow-2xl rounded-3xl"><CheckCircle2 /> SALVAR GERAL</Button></div>
                                 </div>
                             )}
                             {adminSubView === 'INICIO' && (
                                 <div className="space-y-10 animate-in fade-in">
-                                    <h2 className="text-4xl font-black uppercase text-white">Painel de Controle</h2>
+                                    <h2 className="text-4xl font-black uppercase text-white">Painel</h2>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                                         <div className="glass-panel p-8 rounded-[40px]"><p className="text-5xl font-black text-white">{advertisersList.length}</p><span className="text-[10px] font-black text-gray-600 uppercase">CLIENTES</span></div>
-                                        <div className="glass-panel p-8 rounded-[40px]"><p className="text-5xl font-black text-brand-secondary">{awaitingList.length}</p><span className="text-[10px] font-black text-gray-600 uppercase">PENDENTES</span></div>
                                         <div className="glass-panel p-8 rounded-[40px]"><p className="text-5xl font-black text-white">{posts.length}</p><span className="text-[10px] font-black text-gray-600 uppercase">ANÚNCIOS</span></div>
-                                        <div className="glass-panel p-8 rounded-[40px]"><p className="text-5xl font-black text-white">{categories.length}</p><span className="text-[10px] font-black text-gray-600 uppercase">NICHOS</span></div>
                                     </div>
                                 </div>
                             )}
                             {adminSubView === 'PAGAMENTOS' && (
                                 <div className="space-y-8 animate-in fade-in">
-                                    <h2 className="text-3xl font-black uppercase text-white">Validar Pagamentos</h2>
+                                    <h2 className="text-3xl font-black uppercase text-white">Pagamentos</h2>
                                     {awaitingList.length > 0 ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                             {awaitingList.map(u => (
                                                 <div key={u.id} className="glass-panel p-8 rounded-[40px] border-l-brand-secondary border-l-4">
                                                     <p className="text-lg font-black text-white mb-2 uppercase">{u.name}</p>
-                                                    <div className="bg-white/5 p-4 rounded-2xl mb-6 text-[10px] font-black text-brand-primary">PLANO: {plans.find(p => p.id === u.planId)?.name}</div>
-                                                    <Button onClick={() => handleConfirmPayment(u)} className="w-full h-14 font-black uppercase text-xs">Aprovar e Ativar</Button>
+                                                    <Button onClick={() => handleConfirmPayment(u)} className="w-full h-14 font-black uppercase text-xs">Aprovar PIX</Button>
                                                 </div>
                                             ))}
                                         </div>
-                                    ) : <p className="text-gray-500 font-bold uppercase text-xs">Sem pendências no momento.</p>}
+                                    ) : <p className="text-gray-500 font-bold uppercase text-xs">Sem pendências.</p>}
                                 </div>
                             )}
                         </main>
@@ -572,13 +550,40 @@ const App: React.FC = () => {
                 return (
                     <div className="pt-24 pb-20 max-w-6xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in slide-in-from-bottom">
                         <div className="lg:col-span-8 space-y-8">
-                            <div className="glass-panel p-10 rounded-[40px] border border-white/5">
+                            {/* GERADOR MÁGICO COM IA */}
+                            <div className="relative group overflow-hidden rounded-[40px] p-1 bg-gradient-to-r from-brand-primary via-purple-500 to-brand-secondary">
+                                <div className="bg-brand-dark rounded-[39px] p-8 space-y-6 relative overflow-hidden">
+                                    <div className="absolute top-[-50px] right-[-50px] w-40 h-40 bg-brand-primary/10 rounded-full blur-3xl" />
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="p-3 bg-brand-primary/20 rounded-2xl"><Sparkles className="text-brand-primary" size={24} /></div>
+                                        <div>
+                                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Gerador Mágico IA</h2>
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Crie título, texto e imagem de uma vez</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col md:flex-row gap-4">
+                                        <input 
+                                            value={magicPrompt} 
+                                            onChange={e => setMagicPrompt(e.target.value)} 
+                                            placeholder="Ex: Promoção de pizza com borda recheada para este sábado..." 
+                                            className="flex-1 bg-white/5 border border-white/10 p-5 rounded-3xl text-white outline-none focus:border-brand-primary transition-all text-sm"
+                                        />
+                                        <Button 
+                                            onClick={handleMagicGenerate} 
+                                            isLoading={isGeneratingAI}
+                                            className="md:w-64 h-16 rounded-3xl"
+                                        >
+                                            <Wand2 size={18} /> GERAR TUDO
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="glass-panel p-10 rounded-[40px] border-2 border-brand-primary/20 shadow-2xl relative overflow-hidden">
+                                {editingPost && <div className="absolute top-0 left-0 w-full h-1.5 bg-brand-primary animate-pulse" />}
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                                    <h2 className="text-3xl font-black uppercase text-white tracking-tighter">Novo Anúncio</h2>
+                                    <h2 className="text-3xl font-black uppercase text-white tracking-tighter">{editingPost ? 'Editar Anúncio' : 'Dados do Anúncio'}</h2>
                                     <div className="flex flex-wrap gap-2">
-                                        <button onClick={() => handleGenerateAI('short')} disabled={isGeneratingAI} className="bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 px-5 py-2 rounded-full text-[10px] font-black uppercase flex items-center gap-2 transition-all">
-                                            {isGeneratingAI ? <Loader2 className="animate-spin" size={14}/> : <Sparkles size={14}/>} Texto IA
-                                        </button>
                                         <button onClick={() => handleGenerateAI('radio')} disabled={isGeneratingAI} className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 px-5 py-2 rounded-full text-[10px] font-black uppercase flex items-center gap-2 transition-all">
                                             {isGeneratingAI ? <Loader2 className="animate-spin" size={14}/> : <Radio size={14}/>} Spot Rádio
                                         </button>
@@ -591,42 +596,49 @@ const App: React.FC = () => {
                                     e.preventDefault();
                                     const form = e.target as any;
                                     const imgVal = (document.getElementById('postImgInput') as HTMLInputElement).value;
-                                    if(!imgVal) { setToast({m: "Selecione uma imagem para o anúncio!", t: "error"}); return; }
-                                    await storageService.addPost({ id: 'p-'+Date.now(), authorId: currentUser.id, authorName: currentUser.name, category: currentUser.profession || 'Geral', title: form.title.value, content: form.content.value, imageUrl: imgVal, whatsapp: currentUser.phone, phone: currentUser.phone, createdAt: new Date().toISOString() });
-                                    refresh(); setToast({m: "Anúncio Publicado!", t: "success"}); form.reset();
+                                    if(!imgVal && !editingPost) { setToast({m: "Imagem necessária!", t: "error"}); return; }
+                                    const postData = { id: editingPost ? editingPost.id : 'p-'+Date.now(), authorId: currentUser.id, authorName: currentUser.name, category: currentUser.profession || 'Geral', title: form.title.value, content: form.content.value, imageUrl: imgVal || editingPost?.imageUrl, whatsapp: currentUser.phone, phone: currentUser.phone, createdAt: editingPost ? editingPost.createdAt : new Date().toISOString() };
+                                    if (editingPost) await storageService.updatePost(postData);
+                                    else await storageService.addPost(postData);
+                                    setEditingPost(null); refresh(); form.reset();
                                     const pr = document.getElementById('postImgPreview') as HTMLImageElement;
-                                    if (pr) pr.classList.add('hidden');
+                                    pr?.classList.add('hidden');
                                     document.getElementById('postImgPlaceholder')?.classList.remove('hidden');
+                                    (document.getElementById('postImgInput') as HTMLInputElement).value = "";
                                 }} className="space-y-6">
-                                    <input ref={adTitleRef} name="title" required placeholder="Título do Anúncio" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary font-bold" />
-                                    <textarea ref={adContentRef} name="content" required placeholder="Descrição ou script..." className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white h-40 outline-none focus:border-brand-primary text-sm" />
+                                    <input ref={adTitleRef} name="title" required placeholder="Título" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary font-bold" />
+                                    <textarea ref={adContentRef} name="content" required placeholder="Descrição..." className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white h-40 outline-none focus:border-brand-primary text-sm" />
                                     <div onClick={() => document.getElementById('postFilePicker')?.click()} className="aspect-video bg-black/40 border-2 border-dashed border-white/10 rounded-3xl flex items-center justify-center cursor-pointer overflow-hidden relative group hover:border-brand-primary transition-all">
                                         <img id="postImgPreview" className="w-full h-full object-contain hidden relative z-10" />
-                                        <div id="postImgPlaceholder" className="flex flex-col items-center gap-2"><Camera className="text-gray-500" size={32} /><span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Escolher Foto do Anúncio</span></div>
+                                        <div id="postImgPlaceholder" className="flex flex-col items-center gap-2">
+                                            {isGeneratingImageAI ? <Loader2 className="animate-spin text-brand-primary" size={48} /> : <Camera className="text-gray-500" size={32} />}
+                                            <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{isGeneratingImageAI ? 'Gerando Imagem com IA...' : 'Trocar Foto'}</span>
+                                        </div>
                                         <input id="postImgInput" type="hidden" /><input id="postFilePicker" type="file" className="hidden" accept="image/*" onChange={async (e) => {
                                             const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); (document.getElementById('postImgInput') as HTMLInputElement).value = comp; const pr = document.getElementById('postImgPreview') as HTMLImageElement; pr.src = comp; pr.classList.remove('hidden'); document.getElementById('postImgPlaceholder')?.classList.add('hidden'); }; r.readAsDataURL(f); }
                                         }} />
                                     </div>
-                                    <Button type="submit" className="w-full h-16 uppercase font-black text-lg">Publicar Anúncio Agora</Button>
+                                    <div className="flex gap-4">
+                                        <Button type="submit" className="flex-1 h-16 uppercase font-black text-lg">{editingPost ? 'Salvar Alterações' : 'Publicar Anúncio Agora'}</Button>
+                                        {editingPost && <Button type="button" variant="outline" onClick={() => setEditingPost(null)} className="h-16 uppercase font-black px-8">Cancelar</Button>}
+                                    </div>
                                 </form>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {userPostsList.map(p => (
                                     <div key={p.id} className="relative group">
                                         <PostCard post={p} author={currentUser} />
-                                        <button onClick={() => { if(confirm("Deseja mesmo remover este anúncio?")) storageService.deletePost(p.id).then(refresh) }} className="absolute top-4 right-4 p-3 bg-red-500 text-white rounded-2xl opacity-0 group-hover:opacity-100 transition-all z-20"><Trash2 size={18}/></button>
+                                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
+                                            <button onClick={() => { setEditingPost(p); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="p-3 bg-brand-primary text-white rounded-2xl shadow-xl hover:scale-110 transition-transform"><Edit size={18}/></button>
+                                            <button onClick={() => { if(confirm("Remover?")) storageService.deletePost(p.id).then(refresh) }} className="p-3 bg-red-500 text-white rounded-2xl shadow-xl hover:scale-110 transition-transform"><Trash2 size={18}/></button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                         <div className="lg:col-span-4 glass-panel p-8 rounded-[40px] text-center h-fit sticky top-24 border border-brand-accent/20">
                             <h3 className="font-black text-xl mb-4 text-brand-accent uppercase">Minha Conta</h3>
-                            <div className={`p-4 rounded-2xl border mb-6 text-[10px] font-black uppercase tracking-widest ${currentUser?.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500/30 text-green-400 bg-green-500/5' : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5'}`}>
-                                STATUS: {currentUser?.paymentStatus || '...'}
-                            </div>
-                            {currentUser?.expiresAt && (
-                                <div className="text-[10px] text-gray-500 font-bold uppercase mb-6">Assinatura até: {new Date(currentUser.expiresAt).toLocaleDateString()}</div>
-                            )}
+                            <div className={`p-4 rounded-2xl border mb-6 text-[10px] font-black uppercase tracking-widest ${currentUser?.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500/30 text-green-400 bg-green-500/5' : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5'}`}>STATUS: {currentUser?.paymentStatus || '...'}</div>
                             <Button onClick={() => setCurrentView('PAYMENT')} variant="secondary" className="w-full py-4 text-[10px] font-black uppercase tracking-widest">Mudar de Plano</Button>
                         </div>
                     </div>
@@ -635,15 +647,14 @@ const App: React.FC = () => {
             case 'PAYMENT':
                 return (
                     <div className="pt-32 pb-20 max-w-6xl mx-auto px-4 text-center animate-in zoom-in">
-                        <h2 className="text-5xl font-black mb-16 uppercase text-white tracking-tighter">Sua Jornada Começa Aqui</h2>
+                        <h2 className="text-5xl font-black mb-16 uppercase text-white tracking-tighter">Escolha seu Plano</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
                             {plans.map(p => (
                                 <div key={p.id} onClick={() => {
                                     if (!currentUser) return;
                                     const isFree = p.price === 0;
-                                    let expiresAt = undefined;
-                                    if(isFree) { const d = new Date(); d.setDate(d.getDate() + p.durationDays); expiresAt = d.toISOString(); }
-                                    storageService.updateUser({ ...currentUser, planId: p.id, paymentStatus: isFree ? PaymentStatus.CONFIRMED : PaymentStatus.AWAITING, expiresAt }).then(() => { refresh(); setToast({m: isFree ? "Degustação Iniciada! Aproveite." : "Plano Selecionado! Aguardando PIX...", t: "success"}); if(isFree) setCurrentView('DASHBOARD'); });
+                                    let exp = undefined; if(isFree) { const d = new Date(); d.setDate(d.getDate() + p.durationDays); exp = d.toISOString(); }
+                                    storageService.updateUser({ ...currentUser, planId: p.id, paymentStatus: isFree ? PaymentStatus.CONFIRMED : PaymentStatus.AWAITING, expiresAt: exp }).then(() => { refresh(); if(isFree) setCurrentView('DASHBOARD'); });
                                 }} className={`glass-panel p-10 rounded-[40px] border-2 transition-all cursor-pointer group flex flex-col justify-between ${currentUser?.planId === p.id ? 'border-brand-primary' : 'border-white/5 hover:border-brand-primary/40'}`}>
                                     <div>
                                         <h3 className="font-black uppercase mb-4 text-white text-sm">{p.name}</h3>
@@ -654,17 +665,7 @@ const App: React.FC = () => {
                                 </div>
                             ))}
                         </div>
-                        {currentUser?.paymentStatus === PaymentStatus.AWAITING && (
-                            <div className="max-w-2xl mx-auto glass-panel p-10 rounded-[40px] border border-brand-accent/30 text-left">
-                                <h3 className="text-xl font-black text-white uppercase mb-6 text-center">Finalize o Pagamento</h3>
-                                <div className="space-y-4">
-                                    <div className="bg-brand-dark p-4 rounded-xl border border-white/10"><p className="text-[10px] text-gray-500 uppercase mb-1">Chave PIX</p><p className="font-black text-white select-all">{siteConfig?.pixKey || ''}</p></div>
-                                    <div className="bg-brand-dark p-4 rounded-xl border border-white/10"><p className="text-[10px] text-gray-500 uppercase mb-1">Titular da Conta</p><p className="font-black text-white">{siteConfig?.pixName || ''}</p></div>
-                                    <p className="text-[10px] text-gray-500 font-bold italic text-center">Envie o comprovante para o Hélio após o pagamento.</p>
-                                </div>
-                            </div>
-                        )}
-                        <button onClick={() => setCurrentView('DASHBOARD')} className="mt-10 text-[10px] font-black text-gray-600 uppercase hover:text-white transition-colors">Voltar ao Painel do Usuário</button>
+                        <button onClick={() => setCurrentView('DASHBOARD')} className="mt-10 text-[10px] font-black text-gray-600 uppercase hover:text-white transition-colors">Voltar</button>
                     </div>
                 );
             case 'LOGIN':
@@ -680,33 +681,22 @@ const App: React.FC = () => {
                                 try {
                                     if (currentView === 'LOGIN') {
                                         const user = await storageService.findUserByEmail(email);
-                                        if (user) handleLogin(user); else setToast({ m: "Conta não encontrada.", t: "error"});
+                                        if (user) handleLogin(user); else setToast({ m: "Não encontrado.", t: "error"});
                                     } else {
-                                        const u = await storageService.addUser({ 
-                                            name: form.name.value, 
-                                            email: email.toLowerCase(), 
-                                            role: UserRole.ADVERTISER, 
-                                            profession: form.profession.value, 
-                                            phone: form.phone.value, 
-                                            paymentStatus: PaymentStatus.AWAITING 
-                                        });
+                                        const u = await storageService.addUser({ name: form.name.value, email: email.toLowerCase(), role: UserRole.ADVERTISER, profession: form.profession.value, phone: form.phone.value, paymentStatus: PaymentStatus.AWAITING });
                                         handleLogin(u);
                                     }
-                                } catch (err) {
-                                    setToast({ m: "Ocorreu um erro inesperado.", t: "error" });
-                                }
+                                } catch (err) { setToast({ m: "Erro.", t: "error" }); }
                             }} className="space-y-4">
                                 {currentView === 'REGISTER' && (
-                                    <>
-                                        <input name="name" required placeholder="Seu Nome ou Nome da Empresa" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" />
-                                        <select name="profession" className="w-full bg-brand-dark border border-white/10 p-4 rounded-2xl text-white font-bold">{categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                                        <input name="phone" required placeholder="Telefone/WhatsApp" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" />
-                                    </>
+                                    <><input name="name" required placeholder="Nome/Empresa" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" />
+                                    <select name="profession" className="w-full bg-brand-dark border border-white/10 p-4 rounded-2xl text-white font-bold">{categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                    <input name="phone" required placeholder="WhatsApp" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" /></>
                                 )}
-                                <input name="email" type="email" required placeholder="E-mail de acesso" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" />
-                                <input name="password" type="password" required placeholder="Senha de segurança" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" />
-                                <Button type="submit" className="w-full h-16 uppercase font-black">{currentView === 'LOGIN' ? 'Entrar' : 'Cadastrar agora'}</Button>
-                                <button type="button" onClick={() => setCurrentView(currentView === 'LOGIN' ? 'REGISTER' : 'LOGIN')} className="w-full text-[10px] text-gray-500 font-black mt-4 uppercase hover:text-white">{currentView === 'LOGIN' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Clique para entrar'}</button>
+                                <input name="email" type="email" required placeholder="E-mail" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" />
+                                <input name="password" type="password" required placeholder="Senha" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-brand-primary" />
+                                <Button type="submit" className="w-full h-16 uppercase font-black">{currentView === 'LOGIN' ? 'Entrar' : 'Cadastrar'}</Button>
+                                <button type="button" onClick={() => setCurrentView(currentView === 'LOGIN' ? 'REGISTER' : 'LOGIN')} className="w-full text-[10px] text-gray-500 font-black mt-4 uppercase hover:text-white">{currentView === 'LOGIN' ? 'Criar conta' : 'Já tem conta?'}</button>
                             </form>
                         </div>
                     </div>
