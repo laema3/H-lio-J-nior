@@ -1,8 +1,7 @@
 
 import React, { useState } from 'react';
 import { ViewState, User, UserRole, SiteConfig } from '../types';
-import { Menu, X, Radio, LogOut, Wifi, WifiOff, Shield } from 'lucide-react';
-import { isSupabaseReady } from '../services/supabase';
+import { Menu, X, Radio, LogOut, Shield } from 'lucide-react';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -10,11 +9,11 @@ interface NavbarProps {
   currentView: ViewState;
   onLogout: () => void;
   config: SiteConfig;
+  isOnline: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, currentView, onLogout, config }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, currentView, onLogout, config, isOnline }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const isOnline = isSupabaseReady();
 
   const navItem = (label: string, target: ViewState, active: boolean) => (
     <button
@@ -51,7 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                 </div>
               )}
             </div>
-            {/* Status Cloud Indicator */}
             <div className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full text-[8px] font-black uppercase border ${isOnline ? 'text-green-500 border-green-500/20 bg-green-500/5' : 'text-red-500 border-red-500/20 bg-red-500/5'}`}>
                <div className={`w-1 h-1 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                {isOnline ? 'Cloud' : 'Offline'}
@@ -60,7 +58,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
 
           <div className="hidden md:flex items-center gap-2">
             {navItem('Início', 'HOME', currentView === 'HOME')}
-            
             {!currentUser && (
               <>
                 {navItem('Login', 'LOGIN', currentView === 'LOGIN')}
@@ -72,7 +69,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                 </button>
               </>
             )}
-
             {currentUser && (
               <div className="flex items-center gap-4 ml-4 pl-4 border-l border-white/10">
                 <div className="text-right">
@@ -82,55 +78,19 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                     </p>
                     <p className="text-xs text-gray-400">{currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Anunciante'}</p>
                 </div>
-                
                 {currentUser.role === UserRole.ADVERTISER && navItem('Painel', 'DASHBOARD', currentView === 'DASHBOARD')}
                 {currentUser.role === UserRole.ADMIN && navItem('Admin', 'ADMIN', currentView === 'ADMIN')}
-
-                <button 
-                  onClick={onLogout}
-                  className="p-2 text-gray-400 hover:text-red-400 transition-colors"
-                  title="Sair"
-                >
-                  <LogOut size={20} />
-                </button>
+                <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-400 transition-colors"><LogOut size={20} /></button>
               </div>
             )}
           </div>
 
           <div className="md:hidden flex items-center gap-4">
             <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-gray-300 hover:text-white p-2"
-            >
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-gray-300 hover:text-white p-2">{isMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
           </div>
         </div>
       </div>
-
-      {isMenuOpen && (
-        <div className="md:hidden bg-[#0f172a] border-b border-white/10 px-4 pt-2 pb-4 space-y-2">
-           <button onClick={() => { setCurrentView('HOME'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg">Início</button>
-           
-           {!currentUser ? (
-             <>
-               <button onClick={() => { setCurrentView('LOGIN'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg">Login</button>
-               <button onClick={() => { setCurrentView('REGISTER'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-3 text-brand-accent font-bold hover:bg-white/10 rounded-lg">Quero Anunciar</button>
-             </>
-           ) : (
-             <>
-                {currentUser.role === UserRole.ADVERTISER && (
-                     <button onClick={() => { setCurrentView('DASHBOARD'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg">Meu Painel</button>
-                )}
-                {currentUser.role === UserRole.ADMIN && (
-                     <button onClick={() => { setCurrentView('ADMIN'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg">Administração</button>
-                )}
-               <button onClick={() => { onLogout(); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-3 text-red-400 hover:bg-white/10 rounded-lg">Sair</button>
-             </>
-           )}
-        </div>
-      )}
     </nav>
   );
 };
