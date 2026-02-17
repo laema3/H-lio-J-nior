@@ -26,7 +26,7 @@ const Countdown: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
       });
     };
     calculate();
-    const timer = setInterval(calculate, 1000 * 60); // Atualiza por minuto
+    const timer = setInterval(calculate, 1000 * 60); 
     return () => clearInterval(timer);
   }, [expiresAt]);
 
@@ -55,8 +55,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, author }) => {
 
   return (
     <div className="glass-panel rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300 flex flex-col h-full group">
-      <div className="relative h-48 overflow-hidden">
-        <img src={post.imageUrl || `https://picsum.photos/400/300?random=${post.id}`} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+      <div className="relative aspect-video overflow-hidden bg-brand-dark">
+        <img src={post.imageUrl || `https://picsum.photos/600/337?random=${post.id}`} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
            <div className="bg-brand-primary text-white text-[10px] px-3 py-1 rounded-full uppercase font-black backdrop-blur-md self-start">
              {post.category}

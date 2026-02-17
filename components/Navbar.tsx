@@ -1,15 +1,17 @@
+
 import React, { useState } from 'react';
-import { ViewState, User, UserRole } from '../types';
-import { Menu, X, Radio, UserCircle, LogOut } from 'lucide-react';
+import { ViewState, User, UserRole, SiteConfig } from '../types';
+import { Menu, X, Radio, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   currentUser: User | null;
   setCurrentView: (view: ViewState) => void;
   currentView: ViewState;
   onLogout: () => void;
+  config: SiteConfig;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, currentView, onLogout }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, currentView, onLogout, config }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItem = (label: string, target: ViewState, active: boolean) => (
@@ -33,19 +35,20 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           
-          {/* Logo */}
+          {/* Logo Paisagem */}
           <div 
-            className="flex items-center gap-3 cursor-pointer group" 
+            className="flex items-center gap-4 cursor-pointer group" 
             onClick={() => setCurrentView('HOME')}
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-brand-secondary to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform duration-300">
-              <Radio className="text-white w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                Hélio Júnior
-              </h1>
-              <span className="text-xs text-brand-secondary font-medium tracking-widest uppercase">Radialista</span>
+            <div className="h-12 min-w-[120px] max-w-[200px] bg-white/5 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 overflow-hidden border border-white/5 p-1">
+              {config.headerLogoUrl ? (
+                <img src={config.headerLogoUrl} className="w-full h-full object-contain" alt="Logo Topo" />
+              ) : (
+                <div className="flex items-center gap-2 px-3">
+                    <Radio className="text-brand-secondary w-5 h-5" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-tighter line-clamp-1">{config.heroLabel}</span>
+                </div>
+              )}
             </div>
           </div>
 

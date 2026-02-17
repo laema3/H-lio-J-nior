@@ -16,7 +16,13 @@ export const DEFAULT_CONFIG: SiteConfig = {
   heroLabel: 'Hélio Júnior',
   heroTitle: 'Portal de Classificados',
   heroSubtitle: 'Destaque sua marca com a credibilidade de quem entende de comunicação.',
-  heroImageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=1200&h=675'
+  heroImageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=1200&h=675',
+  address: 'Rua Exemplo, 123 - Centro',
+  phone: '(00) 0000-0000',
+  whatsapp: '(00) 90000-0000',
+  instagramUrl: 'https://instagram.com',
+  facebookUrl: 'https://facebook.com',
+  youtubeUrl: 'https://youtube.com'
 };
 
 export const INITIAL_CATEGORIES = [
@@ -44,10 +50,9 @@ export const saveToLocal = (key: string, data: any) => {
 
 export const getFromLocal = (key: string, defaultValue: any) => {
   const item = localStorage.getItem(key);
-  if (!item) return defaultValue;
+  if (item === null) return defaultValue;
   try {
-    const parsed = JSON.parse(item);
-    return parsed;
+    return JSON.parse(item);
   } catch {
     return defaultValue;
   }
@@ -55,18 +60,15 @@ export const getFromLocal = (key: string, defaultValue: any) => {
 
 export const storageService = {
   init: () => {
-    // Inicialização síncrona para garantir que os dados existam antes do React renderizar
-    if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
-    if (!localStorage.getItem(STORAGE_KEYS.PLANS)) saveToLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
-    if (!localStorage.getItem(STORAGE_KEYS.USERS)) saveToLocal(STORAGE_KEYS.USERS, []);
-    if (!localStorage.getItem(STORAGE_KEYS.POSTS)) saveToLocal(STORAGE_KEYS.POSTS, []);
-    if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) saveToLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+    if (localStorage.getItem(STORAGE_KEYS.CONFIG) === null) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
+    if (localStorage.getItem(STORAGE_KEYS.PLANS) === null) saveToLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
+    if (localStorage.getItem(STORAGE_KEYS.USERS) === null) saveToLocal(STORAGE_KEYS.USERS, []);
+    if (localStorage.getItem(STORAGE_KEYS.POSTS) === null) saveToLocal(STORAGE_KEYS.POSTS, []);
+    if (localStorage.getItem(STORAGE_KEYS.CATEGORIES) === null) saveToLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
   },
 
-  getConfig: (): SiteConfig => {
-    return getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
-  },
-
+  getConfig: (): SiteConfig => getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG),
+  
   updateConfig: async (config: SiteConfig): Promise<void> => {
     saveToLocal(STORAGE_KEYS.CONFIG, config);
   },
@@ -80,21 +82,15 @@ export const storageService = {
     saveToLocal(STORAGE_KEYS.CATEGORIES, categories);
   },
 
-  getPlans: (): Plan[] => {
-    return getFromLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
-  },
-
+  getPlans: (): Plan[] => getFromLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS),
+  
   savePlans: async (plans: Plan[]): Promise<void> => {
     saveToLocal(STORAGE_KEYS.PLANS, plans);
   },
 
-  getUsers: (): User[] => {
-    return getFromLocal(STORAGE_KEYS.USERS, []);
-  },
-
-  getPosts: (): Post[] => {
-    return getFromLocal(STORAGE_KEYS.POSTS, []);
-  },
+  getUsers: (): User[] => getFromLocal(STORAGE_KEYS.USERS, []),
+  
+  getPosts: (): Post[] => getFromLocal(STORAGE_KEYS.POSTS, []),
 
   findUserByEmail: (email: string): User | undefined => {
     if (email.toLowerCase() === 'admin@helio.com') {
@@ -115,7 +111,6 @@ export const storageService = {
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     const newList = users.map((u: User) => u.id === updatedUser.id ? updatedUser : u);
     saveToLocal(STORAGE_KEYS.USERS, newList);
-    
     const session = getFromLocal(STORAGE_KEYS.SESSION, null);
     if (session && session.id === updatedUser.id) saveToLocal(STORAGE_KEYS.SESSION, updatedUser);
   },

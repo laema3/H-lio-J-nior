@@ -23,6 +23,15 @@ export interface SiteConfig {
   heroSubtitle: string;
   heroImageUrl: string;
   heroLabel: string;
+  // Novos campos
+  headerLogoUrl?: string;
+  footerLogoUrl?: string;
+  address?: string;
+  phone?: string;
+  whatsapp?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
+  youtubeUrl?: string;
 }
 
 export interface User {
