@@ -19,15 +19,15 @@ export const DEFAULT_CONFIG: SiteConfig = {
   heroImageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=1200&h=675'
 };
 
-const INITIAL_CATEGORIES = [
-  'Radialista/Mídia',
-  'Saúde e Bem-estar',
-  'Jurídico',
+export const INITIAL_CATEGORIES = [
   'Construção e Reformas',
-  'Tecnologia e Design',
   'Educação',
   'Festas e Eventos',
-  'Outros'
+  'Jurídico',
+  'Outros',
+  'Radialista/Mídia',
+  'Saúde e Bem-estar',
+  'Tecnologia e Design'
 ];
 
 const DEFAULT_PLANS: Plan[] = [
@@ -46,14 +46,16 @@ export const getFromLocal = (key: string, defaultValue: any) => {
   const item = localStorage.getItem(key);
   if (!item) return defaultValue;
   try {
-    return JSON.parse(item);
+    const parsed = JSON.parse(item);
+    return parsed;
   } catch {
     return defaultValue;
   }
 };
 
 export const storageService = {
-  init: async () => {
+  init: () => {
+    // Inicialização síncrona para garantir que os dados existam antes do React renderizar
     if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
     if (!localStorage.getItem(STORAGE_KEYS.PLANS)) saveToLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
     if (!localStorage.getItem(STORAGE_KEYS.USERS)) saveToLocal(STORAGE_KEYS.USERS, []);
@@ -61,7 +63,7 @@ export const storageService = {
     if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) saveToLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
   },
 
-  getConfig: async (): Promise<SiteConfig> => {
+  getConfig: (): SiteConfig => {
     return getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
   },
 
@@ -69,15 +71,16 @@ export const storageService = {
     saveToLocal(STORAGE_KEYS.CONFIG, config);
   },
 
-  getCategories: async (): Promise<string[]> => {
-    return getFromLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+  getCategories: (): string[] => {
+    const categories = getFromLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+    return [...categories].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   },
 
   saveCategories: async (categories: string[]): Promise<void> => {
     saveToLocal(STORAGE_KEYS.CATEGORIES, categories);
   },
 
-  getPlans: async (): Promise<Plan[]> => {
+  getPlans: (): Plan[] => {
     return getFromLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
   },
 
@@ -85,15 +88,15 @@ export const storageService = {
     saveToLocal(STORAGE_KEYS.PLANS, plans);
   },
 
-  getUsers: async (): Promise<User[]> => {
+  getUsers: (): User[] => {
     return getFromLocal(STORAGE_KEYS.USERS, []);
   },
 
-  getPosts: async (): Promise<Post[]> => {
+  getPosts: (): Post[] => {
     return getFromLocal(STORAGE_KEYS.POSTS, []);
   },
 
-  findUserByEmail: async (email: string): Promise<User | undefined> => {
+  findUserByEmail: (email: string): User | undefined => {
     if (email.toLowerCase() === 'admin@helio.com') {
       return { id: 'admin', name: 'Administrador', email: 'admin@helio.com', role: UserRole.ADMIN, paymentStatus: PaymentStatus.NOT_APPLICABLE, createdAt: new Date().toISOString() };
     }

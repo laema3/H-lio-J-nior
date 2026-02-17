@@ -2,13 +2,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { ViewState, User, UserRole, Post, PaymentStatus, SiteConfig, Plan } from './types';
-import { storageService, DEFAULT_CONFIG, STORAGE_KEYS, getFromLocal, saveToLocal } from './services/storage';
+import { storageService, DEFAULT_CONFIG, STORAGE_KEYS, getFromLocal, saveToLocal, INITIAL_CATEGORIES } from './services/storage';
 import { Button } from './components/Button';
 import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { 
     Search, Clock, Check, Camera, Loader2, Trash2, Edit3, AlertTriangle, Plus, ShieldCheck, LayoutDashboard, Settings, CreditCard, Tag
 } from 'lucide-react';
+
+// Inicializa o storage antes de qualquer renderização
+storageService.init();
 
 const Toast: React.FC<{ message: string, type: 'success' | 'error', onClose: () => void }> = ({ message, type, onClose }) => {
     useEffect(() => {
@@ -142,21 +145,25 @@ const AuthView: React.FC<{ mode: 'LOGIN' | 'REGISTER', categories: string[], onL
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
-        try {
-            const user = await storageService.findUserByEmail(email);
-            if (mode === 'LOGIN') {
-                if (user) onLogin(user); else setError('Usuário não encontrado.');
+        const user = storageService.findUserByEmail(email);
+        if (mode === 'LOGIN') {
+            if (user) onLogin(user); else setError('Usuário não encontrado.');
+            setIsLoading(false);
+        } else {
+            if (user) {
+                setError('E-mail já cadastrado.');
+                setIsLoading(false);
             } else {
-                if (user) setError('E-mail já cadastrado.'); else {
-                    const newUser = await storageService.addUser({ name, email, role: UserRole.ADVERTISER, profession, phone, paymentStatus: PaymentStatus.AWAITING });
-                    onLogin(newUser);
-                }
+                storageService.addUser({ name, email, role: UserRole.ADVERTISER, profession, phone, paymentStatus: PaymentStatus.AWAITING })
+                    .then(newUser => onLogin(newUser))
+                    .catch(() => setError('Erro ao processar.'))
+                    .finally(() => setIsLoading(false));
             }
-        } catch { setError('Erro ao processar.'); } finally { setIsLoading(false); }
+        }
     };
 
     return (
@@ -226,7 +233,7 @@ const DashboardView: React.FC<{ user: User, posts: Post[], onGoToPayment: () => 
                 await onPostUpdated({ ...editingPost, title, content, imageUrl });
                 setEditingPost(null);
             } else {
-                await onPostCreated({ id: 'p-' + Date.now(), authorId: user.id, authorName: user.name, category: user.profession as any || 'Outros', title, content, imageUrl, createdAt: new Date().toISOString(), whatsapp: user.phone, phone: user.phone });
+                await onPostCreated({ id: 'p-' + Date.now(), authorId: user.id, authorName: user.name, category: user.profession || 'Outros', title, content, imageUrl, createdAt: new Date().toISOString(), whatsapp: user.phone, phone: user.phone });
             }
             setTitle(''); setContent(''); setImageUrl(''); setKeywords('');
         } catch { onNotify("Erro ao salvar.", "error"); } finally { setIsSubmitting(false); }
@@ -333,6 +340,9 @@ const AdminView: React.FC<{
     // Plans State
     const [planForm, setPlanForm] = useState<Partial<Plan>>({ name: '', price: 0, durationDays: 30, description: '' });
     const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+    // Sincroniza o editConfig se o config global mudar
+    useEffect(() => { setEditConfig(config); }, [config]);
 
     // Actions
     const handleSaveConfig = async () => { await onUpdateConfig(editConfig); notify("Configurações salvas!", "success"); };
@@ -443,6 +453,9 @@ const AdminView: React.FC<{
                         <h3 className="text-2xl font-black uppercase tracking-tighter mb-4">Foto Banner</h3>
                         <div onClick={() => heroInputRef.current?.click()} className="aspect-video relative rounded-3xl overflow-hidden border-2 border-dashed border-white/10 group cursor-pointer bg-brand-dark">
                             <img src={editConfig.heroImageUrl} className="w-full h-full object-cover group-hover:opacity-40" />
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Camera className="text-white" size={48} />
+                            </div>
                             <input type="file" ref={heroInputRef} className="hidden" accept="image/*" onChange={e => {
                                 const file = e.target.files?.[0]; if (file) {
                                     const reader = new FileReader(); reader.onloadend = () => setEditConfig({...editConfig, heroImageUrl: reader.result as string}); reader.readAsDataURL(file);
@@ -517,31 +530,29 @@ const AdminView: React.FC<{
 };
 
 const App: React.FC = () => {
+    // Sincronização IMEDIATA dos estados com LocalStorage no carregamento
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
     const [currentUser, setCurrentUser] = useState<User | null>(() => getFromLocal(STORAGE_KEYS.SESSION, null));
     const [posts, setPosts] = useState<Post[]>(() => getFromLocal(STORAGE_KEYS.POSTS, []));
     const [allUsers, setAllUsers] = useState<User[]>(() => getFromLocal(STORAGE_KEYS.USERS, []));
     const [plans, setPlans] = useState<Plan[]>(() => getFromLocal(STORAGE_KEYS.PLANS, []));
-    const [categories, setCategories] = useState<string[]>([]);
-    const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG));
+    const [categories, setCategories] = useState<string[]>(() => storageService.getCategories());
+    const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => storageService.getConfig());
+    
     const [filterCategory, setFilterCategory] = useState('ALL');
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
 
-    const refresh = async () => {
-        const [p, u, pl, c, cats] = await Promise.all([
-            storageService.getPosts(), 
-            storageService.getUsers(), 
-            storageService.getPlans(), 
-            storageService.getConfig(),
-            storageService.getCategories()
-        ]);
-        setPosts(p); setAllUsers(u); setPlans(pl); setSiteConfig(c); setCategories(cats);
-        setIsLoading(false);
+    const refresh = () => {
+        // Agora o refresh lê diretamente o estado sincronizado do storage
+        setPosts(storageService.getPosts());
+        setAllUsers(storageService.getUsers());
+        setPlans(storageService.getPlans());
+        setSiteConfig(storageService.getConfig());
+        setCategories(storageService.getCategories());
     };
 
-    useEffect(() => { storageService.init().then(refresh); }, []);
-
+    // Atualiza o estado global quando mudar em qualquer lugar
     const handleLogin = (user: User) => {
         saveToLocal(STORAGE_KEYS.SESSION, user);
         setCurrentUser(user);

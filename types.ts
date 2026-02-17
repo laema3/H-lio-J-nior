@@ -4,17 +4,6 @@ export enum UserRole {
   ADVERTISER = 'ADVERTISER'
 }
 
-export enum ProfessionCategory {
-  RADIO = 'Radialista/Mídia',
-  HEALTH = 'Saúde e Bem-estar',
-  LEGAL = 'Jurídico',
-  CONSTRUCTION = 'Construção e Reformas',
-  TECH = 'Tecnologia e Design',
-  EDUCATION = 'Educação',
-  EVENTS = 'Festas e Eventos',
-  OTHER = 'Outros'
-}
-
 export enum PaymentStatus {
   CONFIRMED = 'PAGAMENTO CONFIRMADO',
   AWAITING = 'AGUARDANDO PAGAMENTO',
@@ -41,7 +30,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  profession?: ProfessionCategory;
+  profession?: string;
   phone?: string;
   planId?: string;
   paymentStatus: PaymentStatus;
@@ -53,7 +42,7 @@ export interface Post {
   id: string;
   authorId: string;
   authorName: string;
-  category: ProfessionCategory;
+  category: string;
   title: string;
   content: string;
   whatsapp?: string;
