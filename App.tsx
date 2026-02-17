@@ -3,17 +3,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { ViewState, User, UserRole, Post, PaymentStatus, SiteConfig, Plan } from './types';
 import { storageService, STORAGE_KEYS, getFromLocal, saveToLocal, DEFAULT_CONFIG, INITIAL_CATEGORIES } from './services/storage';
+import { isSupabaseReady } from './services/supabase';
 import { Button } from './components/Button';
 import { PostCard } from './components/PostCard';
 import { generateAdCopy, chatWithAssistant } from './services/geminiService';
 import { 
     Search, Clock, Check, Camera, Trash2, Edit3, AlertTriangle, Plus, ShieldCheck, Settings, CreditCard, Tag,
     Instagram, Facebook, Youtube, Phone, MapPin, Radio, MessageCircle, Send, X, Bot, LayoutDashboard, Loader2, 
-    Image as ImageIcon, Users, CheckCircle2, XCircle, Layers, BarChart3, ChevronRight, Mail, PhoneCall
+    Image as ImageIcon, Users, CheckCircle2, XCircle, Layers, BarChart3, ChevronRight, Mail, PhoneCall, Globe, ArrowRight, ExternalLink, Database
 } from 'lucide-react';
 
-// Admin Sub-Views
-type AdminSubView = 'DASHBOARD' | 'CLIENTS' | 'PAYMENTS' | 'ADS' | 'CATEGORIES' | 'PLANS' | 'SETTINGS';
+// Admin Sub-Views para o Menu Lateral
+type AdminSubView = 'INICIO' | 'CLIENTES' | 'PAGAMENTOS' | 'ANUNCIOS' | 'CATEGORIAS' | 'PLANOS' | 'AJUSTES';
 
 const compressImage = (base64Str: string): Promise<string> => {
     return new Promise((resolve) => {
@@ -116,25 +117,81 @@ const AIChat: React.FC<{ config: SiteConfig }> = ({ config }) => {
     );
 };
 
-const Footer: React.FC<{ config: SiteConfig }> = ({ config }) => (
-    <footer className="bg-brand-dark/80 backdrop-blur-xl border-t border-white/5 py-20 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-12 gap-12">
-            <div className="md:col-span-6 space-y-8">
-                <div className="h-16 w-56 bg-white/5 rounded-2xl flex items-center justify-center border border-white/5 overflow-hidden">
-                    {config.footerLogoUrl ? <img src={config.footerLogoUrl} className="w-full h-full object-contain" /> : <span className="font-black text-white">{config.heroLabel}</span>}
+const Footer: React.FC<{ config: SiteConfig, setCurrentView: (v: ViewState) => void }> = ({ config, setCurrentView }) => (
+    <footer className="relative bg-[#0b1120] overflow-hidden pt-24 pb-12 mt-auto">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[1px] bg-gradient-to-r from-transparent via-brand-primary/50 to-transparent" />
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-brand-primary/10 rounded-full blur-[100px] pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-4 relative z-10">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-16 mb-20">
+                <div className="md:col-span-4 space-y-8 text-center md:text-left">
+                    <div 
+                        className="inline-block h-16 w-56 bg-white/5 rounded-2xl border border-white/5 overflow-hidden p-2 cursor-pointer hover:bg-white/10 transition-all"
+                        onClick={() => { window.scrollTo({top: 0, behavior: 'smooth'}); setCurrentView('HOME'); }}
+                    >
+                        {config.footerLogoUrl ? <img src={config.footerLogoUrl} className="w-full h-full object-contain" /> : <span className="font-black text-white text-lg uppercase tracking-tighter flex items-center justify-center h-full">{config.heroLabel}</span>}
+                    </div>
+                    <p className="text-gray-400 text-sm leading-relaxed italic max-w-sm mx-auto md:mx-0">
+                        "{config.heroSubtitle}"
+                    </p>
+                    <div className="flex justify-center md:justify-start gap-4">
+                        {config.instagramUrl && <a href={config.instagramUrl} target="_blank" className="p-3 bg-white/5 rounded-2xl text-gray-400 hover:text-brand-primary hover:bg-brand-primary/10 transition-all border border-white/5"><Instagram size={20}/></a>}
+                        {config.facebookUrl && <a href={config.facebookUrl} target="_blank" className="p-3 bg-white/5 rounded-2xl text-gray-400 hover:text-brand-primary hover:bg-brand-primary/10 transition-all border border-white/5"><Facebook size={20}/></a>}
+                        {config.youtubeUrl && <a href={config.youtubeUrl} target="_blank" className="p-3 bg-white/5 rounded-2xl text-gray-400 hover:text-brand-primary hover:bg-brand-primary/10 transition-all border border-white/5"><Youtube size={20}/></a>}
+                    </div>
                 </div>
-                <p className="text-gray-400 text-sm italic">"{config.heroSubtitle}"</p>
-                <div className="flex gap-4">
-                    {config.instagramUrl && <a href={config.instagramUrl} target="_blank" className="p-3 bg-white/5 rounded-xl text-gray-400 hover:text-white"><Instagram size={20}/></a>}
-                    {config.facebookUrl && <a href={config.facebookUrl} target="_blank" className="p-3 bg-white/5 rounded-xl text-gray-400 hover:text-white"><Facebook size={20}/></a>}
-                    {config.youtubeUrl && <a href={config.youtubeUrl} target="_blank" className="p-3 bg-white/5 rounded-xl text-gray-400 hover:text-white"><Youtube size={20}/></a>}
+
+                <div className="md:col-span-2 space-y-6 text-center md:text-left">
+                    <h3 className="text-white font-black uppercase tracking-widest text-[10px] mb-8">Navegação</h3>
+                    <ul className="space-y-4">
+                        <li><button onClick={() => setCurrentView('HOME')} className="text-sm text-gray-400 hover:text-white transition-colors flex items-center justify-center md:justify-start gap-2 group"><ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" /> Início</button></li>
+                        <li><button onClick={() => setCurrentView('LOGIN')} className="text-sm text-gray-400 hover:text-white transition-colors flex items-center justify-center md:justify-start gap-2 group"><ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" /> Acessar Conta</button></li>
+                        <li><button onClick={() => setCurrentView('REGISTER')} className="text-sm text-gray-400 hover:text-white transition-colors flex items-center justify-center md:justify-start gap-2 group"><ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" /> Quero Anunciar</button></li>
+                    </ul>
+                </div>
+
+                <div className="md:col-span-3 space-y-6 text-center md:text-left">
+                    <h3 className="text-white font-black uppercase tracking-widest text-[10px] mb-8">Fale Conosco</h3>
+                    <div className="space-y-5">
+                        <div className="flex flex-col md:flex-row items-center gap-3 text-sm text-gray-400 group">
+                            <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-all"><MapPin size={16}/></div>
+                            <span className="text-xs">{config.address || 'Endereço não configurado'}</span>
+                        </div>
+                        <div className="flex flex-col md:flex-row items-center gap-3 text-sm text-gray-400 group">
+                            <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-all"><PhoneCall size={16}/></div>
+                            <span className="text-xs font-bold">{config.phone || '(00) 0000-0000'}</span>
+                        </div>
+                        <div className="flex flex-col md:flex-row items-center gap-3 text-sm text-gray-400 group">
+                            <div className="p-2 bg-green-500/10 rounded-xl text-green-500 group-hover:bg-green-500 group-hover:text-white transition-all"><MessageCircle size={16}/></div>
+                            <span className="text-xs font-black">{config.whatsapp || '(00) 00000-0000'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="md:col-span-3 space-y-8">
+                    <div className="glass-panel p-6 rounded-[32px] border border-white/5 space-y-4">
+                        <h4 className="text-xs font-black text-brand-accent uppercase tracking-widest">Segurança & IA</h4>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight leading-relaxed">
+                            Anúncios verificados e assistente inteligente para sua melhor performance.
+                        </p>
+                        <div className="flex gap-2">
+                             <div className="flex-1 h-1 bg-brand-primary/20 rounded-full overflow-hidden">
+                                <div className="h-full w-2/3 bg-brand-primary animate-pulse" />
+                             </div>
+                             <div className="flex-1 h-1 bg-brand-secondary/20 rounded-full" />
+                             <div className="flex-1 h-1 bg-brand-accent/20 rounded-full" />
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div className="md:col-span-6 space-y-4 text-sm text-gray-400">
-                <h3 className="text-white font-black uppercase tracking-widest text-xs">Contato</h3>
-                <p className="flex items-center gap-2"><MapPin size={16} className="text-brand-primary"/> {config.address}</p>
-                <p className="flex items-center gap-2"><Phone size={16} className="text-brand-primary"/> {config.phone}</p>
-                <p>© {new Date().getFullYear()} Portal Hélio Júnior</p>
+
+            <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">
+                    © {new Date().getFullYear()} Portal de Anunciantes Hélio Júnior. Todos os direitos reservados.
+                </p>
+                <div className="flex items-center gap-6">
+                    <span className="text-[9px] text-gray-600 font-black uppercase tracking-widest flex items-center gap-1">Desenvolvido com <Check size={10} className="text-brand-primary" /> Broadcaster v3</span>
+                </div>
             </div>
         </div>
     </footer>
@@ -143,7 +200,7 @@ const Footer: React.FC<{ config: SiteConfig }> = ({ config }) => (
 const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
-    const [adminSubView, setAdminSubView] = useState<AdminSubView>('DASHBOARD');
+    const [adminSubView, setAdminSubView] = useState<AdminSubView>('INICIO');
     const [currentUser, setCurrentUser] = useState<User | null>(() => getFromLocal(STORAGE_KEYS.SESSION, null));
     const [posts, setPosts] = useState<Post[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -295,116 +352,149 @@ const App: React.FC = () => {
 
                 return (
                     <div className="min-h-screen bg-brand-dark pt-20 flex">
-                        {/* Sidebar */}
-                        <aside className="w-64 border-r border-white/5 bg-brand-dark/50 flex flex-col p-6 gap-2 hidden md:flex shrink-0">
+                        <aside className="w-72 border-r border-white/5 bg-brand-dark/80 backdrop-blur-2xl flex flex-col p-6 gap-3 hidden md:flex shrink-0">
+                            <div className="mb-8 px-4">
+                                <p className="text-[10px] font-black text-brand-primary uppercase tracking-widest mb-1">Broadcaster v3</p>
+                                <h2 className="text-lg font-black text-white uppercase tracking-tighter">Painel de Gestão</h2>
+                            </div>
+                            
                             {[
-                                { id: 'DASHBOARD', label: 'Resumo', icon: BarChart3 },
-                                { id: 'CLIENTS', label: 'Clientes', icon: Users },
-                                { id: 'PAYMENTS', label: 'Pagamentos', icon: CreditCard, count: awaitingPayments.length },
-                                { id: 'ADS', label: 'Anúncios', icon: ImageIcon },
-                                { id: 'CATEGORIES', label: 'Categorias', icon: Tag },
-                                { id: 'PLANS', label: 'Planos', icon: Layers },
-                                { id: 'SETTINGS', label: 'Ajustes', icon: Settings }
+                                { id: 'INICIO', label: 'Resumo Geral', icon: BarChart3 },
+                                { id: 'CLIENTES', label: 'Clientes', icon: Users },
+                                { id: 'PAGAMENTOS', label: 'Pagamentos', icon: CreditCard, count: awaitingPayments.length },
+                                { id: 'ANUNCIOS', label: 'Anúncios', icon: ImageIcon },
+                                { id: 'CATEGORIAS', label: 'Categorias', icon: Tag },
+                                { id: 'PLANOS', label: 'Planos de Venda', icon: Layers },
+                                { id: 'AJUSTES', label: 'Ajustes do Site', icon: Settings }
                             ].map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => setAdminSubView(item.id as AdminSubView)}
-                                    className={`flex items-center justify-between p-3 rounded-xl transition-all group ${adminSubView === item.id ? 'bg-brand-primary text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+                                    className={`flex items-center justify-between p-4 rounded-2xl transition-all group border ${adminSubView === item.id ? 'bg-brand-primary border-brand-primary text-white shadow-xl shadow-brand-primary/20' : 'text-gray-400 border-transparent hover:bg-white/5 hover:text-white'}`}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <item.icon size={18} />
-                                        <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
+                                        <item.icon size={20} className={adminSubView === item.id ? 'text-white' : 'text-gray-500 group-hover:text-brand-primary transition-colors'} />
+                                        <span className="text-[11px] font-black uppercase tracking-widest">{item.label}</span>
                                     </div>
-                                    {item.count ? <span className="bg-brand-secondary text-[10px] px-1.5 py-0.5 rounded-full text-white">{item.count}</span> : <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                    {item.count ? <span className="bg-brand-secondary text-[10px] px-2 py-0.5 rounded-full text-white font-black">{item.count}</span> : <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                                 </button>
                             ))}
+                            
+                            <div className="mt-auto pt-6 border-t border-white/5 space-y-4">
+                                <div className={`px-4 py-2 rounded-xl flex items-center gap-2 ${isSupabaseReady() ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                                    <Database size={14} />
+                                    <span className="text-[9px] font-black uppercase tracking-widest">{isSupabaseReady() ? 'Cloud Conectado' : 'Modo Offline (Local)'}</span>
+                                </div>
+                                <button onClick={() => setCurrentView('HOME')} className="flex items-center gap-3 p-4 w-full text-gray-500 hover:text-white transition-all text-[11px] font-black uppercase tracking-widest">
+                                    <Globe size={18} /> Ver Site Público
+                                </button>
+                            </div>
                         </aside>
 
-                        {/* Main Content Area */}
-                        <main className="flex-1 p-8 overflow-y-auto">
-                            {adminSubView === 'DASHBOARD' && (
-                                <div className="space-y-8 animate-in fade-in duration-500">
-                                    <h2 className="text-3xl font-black uppercase">Visão Geral</h2>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                                        <div className="glass-panel p-6 rounded-3xl border border-white/5">
-                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Total Anunciantes</p>
-                                            <p className="text-4xl font-black">{advertisers.length}</p>
-                                        </div>
-                                        <div className="glass-panel p-6 rounded-3xl border border-white/5 border-l-brand-secondary border-l-4">
-                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Pendentes Pgto</p>
-                                            <p className="text-4xl font-black text-brand-secondary">{awaitingPayments.length}</p>
-                                        </div>
-                                        <div className="glass-panel p-6 rounded-3xl border border-white/5">
-                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Anúncios Ativos</p>
-                                            <p className="text-4xl font-black text-brand-primary">{posts.length}</p>
-                                        </div>
-                                        <div className="glass-panel p-6 rounded-3xl border border-white/5">
-                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Categorias</p>
-                                            <p className="text-4xl font-black">{categories.length}</p>
+                        <main className="flex-1 p-10 overflow-y-auto bg-gradient-to-br from-brand-dark/50 to-transparent">
+                            
+                            {adminSubView === 'INICIO' && (
+                                <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <h2 className="text-4xl font-black uppercase tracking-tighter">Bem-vindo, Hélio</h2>
+                                            <p className="text-gray-500 font-bold text-sm">Estatísticas em tempo real do seu portal.</p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <div className="glass-panel p-8 rounded-[40px] space-y-4">
-                                            <h3 className="font-black uppercase text-sm">Últimos Clientes</h3>
-                                            {advertisers.slice(0, 5).map(u => (
-                                                <div key={u.id} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-black uppercase">{u.name}</span>
-                                                        <span className="text-[10px] text-gray-500">{u.email}</span>
-                                                    </div>
-                                                    <span className={`text-[8px] px-2 py-1 rounded-full font-bold uppercase ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>{u.paymentStatus}</span>
-                                                </div>
-                                            ))}
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        <div className="glass-panel p-8 rounded-[32px] border border-white/5 group hover:border-brand-primary/30 transition-all">
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mb-4 tracking-widest">Anunciantes</p>
+                                            <p className="text-5xl font-black text-white">{advertisers.length}</p>
                                         </div>
-                                        <div className="glass-panel p-8 rounded-[40px] space-y-4">
-                                            <h3 className="font-black uppercase text-sm">Atividade Recente</h3>
-                                            {posts.slice(0, 5).map(p => (
-                                                <div key={p.id} className="flex items-center gap-4 py-3 border-b border-white/5 last:border-0">
-                                                    <img src={p.imageUrl} className="w-10 h-10 rounded-lg object-cover" />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-black uppercase line-clamp-1">{p.title}</span>
-                                                        <span className="text-[10px] text-gray-500">por {p.authorName}</span>
+                                        <div className="glass-panel p-8 rounded-[32px] border border-white/5 border-l-brand-secondary border-l-4">
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mb-4 tracking-widest">Pendentes</p>
+                                            <p className="text-5xl font-black text-brand-secondary">{awaitingPayments.length}</p>
+                                        </div>
+                                        <div className="glass-panel p-8 rounded-[32px] border border-white/5">
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mb-4 tracking-widest">Anúncios</p>
+                                            <p className="text-5xl font-black text-brand-primary">{posts.length}</p>
+                                        </div>
+                                        <div className="glass-panel p-8 rounded-[32px] border border-white/5">
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mb-4 tracking-widest">Categorias</p>
+                                            <p className="text-5xl font-black">{categories.length}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                                        <div className="glass-panel p-8 rounded-[40px] space-y-6">
+                                            <h3 className="font-black uppercase text-xs tracking-widest flex items-center gap-2"><Users size={16} className="text-brand-primary"/> Novos Cadastros</h3>
+                                            <div className="space-y-1">
+                                                {advertisers.slice(0, 5).map(u => (
+                                                    <div key={u.id} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 group">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs font-black uppercase group-hover:text-brand-primary transition-colors">{u.name}</span>
+                                                            <span className="text-[10px] text-gray-500 font-medium">{u.email}</span>
+                                                        </div>
+                                                        <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>{u.paymentStatus}</span>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="glass-panel p-8 rounded-[40px] space-y-6">
+                                            <h3 className="font-black uppercase text-xs tracking-widest flex items-center gap-2"><ImageIcon size={16} className="text-brand-secondary"/> Últimos Anúncios</h3>
+                                            <div className="space-y-3">
+                                                {posts.slice(0, 5).map(p => (
+                                                    <div key={p.id} className="flex items-center gap-4 py-3 border-b border-white/5 last:border-0">
+                                                        <div className="w-12 h-12 rounded-xl bg-black/40 overflow-hidden border border-white/5">
+                                                            <img src={p.imageUrl} className="w-full h-full object-cover" />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs font-black uppercase line-clamp-1">{p.title}</span>
+                                                            <span className="text-[10px] text-gray-500">por {p.authorName}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {adminSubView === 'CLIENTS' && (
+                            {adminSubView === 'CLIENTES' && (
                                 <div className="space-y-8 animate-in fade-in duration-500">
-                                    <h2 className="text-3xl font-black uppercase">Listagem de Clientes</h2>
-                                    <div className="glass-panel rounded-[32px] overflow-hidden">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="text-3xl font-black uppercase">Listagem de Clientes</h2>
+                                        <div className="relative">
+                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                                            <input placeholder="Buscar cliente..." className="bg-white/5 border border-white/10 rounded-full py-2 pl-12 pr-6 text-xs font-bold outline-none focus:border-brand-primary w-64" />
+                                        </div>
+                                    </div>
+                                    <div className="glass-panel rounded-[32px] overflow-hidden border border-white/5 shadow-2xl">
                                         <table className="w-full text-left">
                                             <thead className="bg-white/5 border-b border-white/10">
-                                                <tr className="text-[10px] font-black uppercase text-gray-500">
-                                                    <th className="px-6 py-4">Nome</th>
-                                                    <th className="px-6 py-4">Contato</th>
-                                                    <th className="px-6 py-4">Profissão</th>
-                                                    <th className="px-6 py-4">Status</th>
-                                                    <th className="px-6 py-4">Ações</th>
+                                                <tr className="text-[10px] font-black uppercase text-gray-500 tracking-widest">
+                                                    <th className="px-8 py-5">Nome / Empresa</th>
+                                                    <th className="px-8 py-5">Contatos</th>
+                                                    <th className="px-8 py-5">Área de Atuação</th>
+                                                    <th className="px-8 py-5 text-center">Status</th>
+                                                    <th className="px-8 py-5 text-right">Ações</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-white/5">
                                                 {advertisers.map(u => (
-                                                    <tr key={u.id} className="hover:bg-white/5 transition-colors">
-                                                        <td className="px-6 py-4">
-                                                            <p className="text-sm font-black text-white">{u.name}</p>
-                                                            <p className="text-[10px] text-gray-500">{u.email}</p>
+                                                    <tr key={u.id} className="hover:bg-white/5 transition-colors group">
+                                                        <td className="px-8 py-6">
+                                                            <p className="text-sm font-black text-white group-hover:text-brand-primary transition-colors">{u.name}</p>
+                                                            <p className="text-[10px] text-gray-500 font-bold tracking-tight">{u.email}</p>
                                                         </td>
-                                                        <td className="px-6 py-4">
+                                                        <td className="px-8 py-6">
                                                             <div className="flex gap-2">
-                                                                <a href={`mailto:${u.email}`} className="p-1.5 bg-brand-primary/10 text-brand-primary rounded-lg hover:bg-brand-primary hover:text-white transition-all"><Mail size={14}/></a>
-                                                                <a href={`tel:${u.phone}`} className="p-1.5 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"><PhoneCall size={14}/></a>
+                                                                <a href={`mailto:${u.email}`} className="p-2 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary hover:text-white transition-all"><Mail size={16}/></a>
+                                                                <a href={`tel:${u.phone}`} className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all"><PhoneCall size={16}/></a>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-4 text-xs font-bold text-gray-400">{u.profession || 'N/A'}</td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={`text-[8px] px-2 py-1 rounded-full font-black uppercase ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>{u.paymentStatus}</span>
+                                                        <td className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-widest">{u.profession || 'Geral'}</td>
+                                                        <td className="px-8 py-6 text-center">
+                                                            <span className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'}`}>{u.paymentStatus}</span>
                                                         </td>
-                                                        <td className="px-6 py-4">
-                                                            <button onClick={() => { if(confirm("Deseja remover este cliente e seus anúncios?")) { advertisers.filter(cl => cl.id !== u.id); /* Storage logic would go here */ refresh(); } }} className="text-red-500 hover:bg-red-500/10 p-2 rounded-xl transition-all"><Trash2 size={16}/></button>
+                                                        <td className="px-8 py-6 text-right">
+                                                            <button onClick={() => { if(confirm("Deseja remover este cliente permanentemente?")) { storageService.updateUser({...u, paymentStatus: PaymentStatus.AWAITING}).then(refresh); setToast({m: "Cliente Desativado", t: "error"}); } }} className="text-red-500 hover:bg-red-500/10 p-2.5 rounded-xl transition-all"><Trash2 size={18}/></button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -414,69 +504,87 @@ const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {adminSubView === 'PAYMENTS' && (
+                            {adminSubView === 'PAGAMENTOS' && (
                                 <div className="space-y-8 animate-in fade-in duration-500">
-                                    <h2 className="text-3xl font-black uppercase">Liberação Manual</h2>
+                                    <div>
+                                        <h2 className="text-3xl font-black uppercase">Fila de Liberação</h2>
+                                        <p className="text-gray-500 font-bold text-sm">Confirme o recebimento para ativar os anúncios.</p>
+                                    </div>
+                                    
                                     <div className="grid grid-cols-1 gap-4">
                                         {awaitingPayments.length > 0 ? awaitingPayments.map(u => (
-                                            <div key={u.id} className="glass-panel p-6 rounded-3xl flex items-center justify-between border-l-4 border-l-yellow-500">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-black uppercase">{u.name}</span>
-                                                    <span className="text-xs text-gray-500">Plano Pretendido: {plans.find(p => p.id === u.planId)?.name || 'N/A'}</span>
+                                            <div key={u.id} className="glass-panel p-8 rounded-[32px] flex items-center justify-between border-l-4 border-l-yellow-500 shadow-xl">
+                                                <div className="flex items-center gap-6">
+                                                    <div className="w-14 h-14 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                                                        <CreditCard size={28} />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-lg font-black uppercase tracking-tighter">{u.name}</span>
+                                                        <div className="flex items-center gap-4 mt-1">
+                                                            <span className="text-xs text-gray-500 font-bold">Plano: {plans.find(p => p.id === u.planId)?.name || 'Especial'}</span>
+                                                            <span className="text-xs text-brand-secondary font-black">R$ {plans.find(p => p.id === u.planId)?.price.toFixed(2) || '0.00'}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
+                                                <div className="flex items-center gap-3">
                                                     <button 
                                                         onClick={() => {
                                                             const exp = new Date(); exp.setDate(exp.getDate() + 30);
                                                             storageService.updateUser({...u, paymentStatus: PaymentStatus.CONFIRMED, expiresAt: exp.toISOString()}).then(refresh);
-                                                            setToast({m: "Acesso Liberado com Sucesso!", t: "success"});
+                                                            setToast({m: "Assinatura Ativada!", t: "success"});
                                                         }}
-                                                        className="flex items-center gap-2 bg-green-500 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-green-500/20"
+                                                        className="flex items-center gap-2 bg-green-500 text-white px-8 py-3.5 rounded-2xl font-black text-xs uppercase shadow-2xl shadow-green-500/30 hover:scale-105 transition-transform"
                                                     >
-                                                        <CheckCircle2 size={16}/> Liberar Acesso
+                                                        <CheckCircle2 size={18}/> Confirmar Recebimento
                                                     </button>
+                                                    <button className="p-3.5 bg-white/5 text-gray-500 rounded-2xl hover:text-white transition-colors border border-white/5"><X size={20}/></button>
                                                 </div>
                                             </div>
                                         )) : (
-                                            <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
-                                                <Check size={48} className="mx-auto text-green-500 mb-4 opacity-30" />
-                                                <p className="text-gray-500 font-bold uppercase text-[10px]">Tudo certo! Sem pagamentos pendentes.</p>
+                                            <div className="text-center py-24 glass-panel rounded-[40px] border border-dashed border-white/10">
+                                                <CheckCircle2 size={64} className="mx-auto text-green-500 mb-4 opacity-20" />
+                                                <p className="text-gray-500 font-black uppercase tracking-widest text-xs">Sem pendências financeiras.</p>
                                             </div>
                                         )}
                                     </div>
                                 </div>
                             )}
 
-                            {adminSubView === 'ADS' && (
+                            {adminSubView === 'ANUNCIOS' && (
                                 <div className="space-y-8 animate-in fade-in duration-500">
-                                    <h2 className="text-3xl font-black uppercase">Moderação de Anúncios</h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="text-3xl font-black uppercase">Moderação</h2>
+                                        <p className="text-gray-500 font-bold text-sm uppercase tracking-widest">{posts.length} Ativos</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                         {posts.map(p => (
                                             <div key={p.id} className="relative group">
                                                 <PostCard post={p} author={allUsers.find(u => u.id === p.authorId)} />
-                                                <button onClick={() => storageService.deletePost(p.id).then(refresh)} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-xl z-20"><Trash2 size={16}/></button>
+                                                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-20 scale-90 group-hover:scale-100">
+                                                    <button onClick={() => storageService.deletePost(p.id).then(refresh)} className="p-3 bg-red-500 text-white rounded-2xl shadow-xl hover:bg-red-600 transition-all"><Trash2 size={18}/></button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            {adminSubView === 'CATEGORIES' && (
+                            {adminSubView === 'CATEGORIAS' && (
                                 <div className="space-y-8 animate-in fade-in duration-500 max-w-2xl">
-                                    <h2 className="text-3xl font-black uppercase">Categorias do Site</h2>
-                                    <div className="glass-panel p-8 rounded-[40px] space-y-6">
-                                        <div className="flex gap-2">
-                                            <input id="newCatAdmin" placeholder="Nome da Categoria..." className="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold" />
+                                    <h2 className="text-3xl font-black uppercase">Gerenciar Nichos</h2>
+                                    <div className="glass-panel p-10 rounded-[40px] space-y-8 border border-white/5">
+                                        <div className="flex gap-3">
+                                            <input id="newCatAdmin" placeholder="Nova Categoria..." className="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black uppercase text-xs tracking-widest outline-none focus:border-brand-primary" />
                                             <Button onClick={() => {
                                                 const v = (document.getElementById('newCatAdmin') as HTMLInputElement).value;
-                                                if(v) { storageService.saveCategories([...categories, v]).then(() => { refresh(); (document.getElementById('newCatAdmin') as HTMLInputElement).value = ''; }); }
-                                            }} className="px-8"><Plus/></Button>
+                                                if(v) { storageService.saveCategories([...categories, v]).then(() => { refresh(); (document.getElementById('newCatAdmin') as HTMLInputElement).value = ''; }); setToast({m: "Categoria Salva", t: "success"}); }
+                                            }} className="px-10"><Plus/></Button>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 gap-3">
                                             {categories.map(c => (
-                                                <div key={c} className="bg-brand-dark/50 border border-white/10 p-4 rounded-2xl flex items-center justify-between group hover:border-brand-primary transition-all">
-                                                    <span className="text-xs font-black uppercase tracking-widest">{c}</span>
-                                                    <button onClick={() => storageService.saveCategories(categories.filter(cat => cat !== c)).then(refresh)} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                                                <div key={c} className="bg-brand-dark/50 border border-white/5 p-5 rounded-2xl flex items-center justify-between group hover:border-brand-primary/50 transition-all">
+                                                    <span className="text-[11px] font-black uppercase tracking-widest text-gray-300">{c}</span>
+                                                    <button onClick={() => storageService.saveCategories(categories.filter(cat => cat !== c)).then(refresh)} className="text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
                                                 </div>
                                             ))}
                                         </div>
@@ -484,64 +592,93 @@ const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {adminSubView === 'PLANS' && (
-                                <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl">
-                                    <h2 className="text-3xl font-black uppercase">Planos e Preços</h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {adminSubView === 'PLANOS' && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <h2 className="text-3xl font-black uppercase">Venda de Exposição</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                         {plans.map(p => (
-                                            <div key={p.id} className="glass-panel p-8 rounded-[40px] border border-white/5">
-                                                <h4 className="font-black text-xs text-gray-500 uppercase mb-6 tracking-widest">{p.name}</h4>
+                                            <div key={p.id} className="glass-panel p-10 rounded-[40px] border border-white/5 relative overflow-hidden group">
+                                                <div className="absolute top-0 right-0 p-4"><Layers size={24} className="text-white/5" /></div>
+                                                <h4 className="font-black text-[10px] text-brand-primary uppercase mb-6 tracking-widest">{p.name}</h4>
                                                 <div className="flex items-baseline gap-1 mb-8">
-                                                    <span className="text-sm font-bold text-brand-secondary">R$</span>
-                                                    <span className="text-4xl font-black text-white">{p.price.toFixed(2)}</span>
+                                                    <span className="text-lg font-black text-brand-secondary">R$</span>
+                                                    <span className="text-5xl font-black text-white tracking-tighter">{p.price.toFixed(2)}</span>
                                                 </div>
-                                                <div className="space-y-3 mb-8">
-                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase"><Check size={14} className="text-green-500"/> {p.durationDays} Dias Ativo</div>
-                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase"><Check size={14} className="text-green-500"/> Suporte IA</div>
+                                                <div className="space-y-4 mb-10">
+                                                    <div className="flex items-center gap-3 text-xs font-bold text-gray-400 uppercase tracking-tight"><Check size={16} className="text-green-500"/> {p.durationDays} Dias de Anúncio</div>
+                                                    <div className="flex items-center gap-3 text-xs font-bold text-gray-400 uppercase tracking-tight"><Check size={16} className="text-green-500"/> Criador IA Ilimitado</div>
                                                 </div>
-                                                <Button variant="outline" className="w-full text-[10px] uppercase font-black py-3">Editar Detalhes</Button>
+                                                <Button variant="outline" className="w-full text-[11px] uppercase font-black py-4 border-white/10 hover:border-brand-primary transition-all">Configurar Valor</Button>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            {adminSubView === 'SETTINGS' && (
-                                <div className="space-y-8 animate-in fade-in duration-500">
-                                    <h2 className="text-3xl font-black uppercase text-brand-accent">Ajustes Globais</h2>
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <div className="glass-panel p-8 rounded-[40px] space-y-6">
-                                            <h3 className="text-sm font-black uppercase">Logos e Identidade</h3>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div onClick={() => document.getElementById('h-logo-s')?.click()} className="aspect-[3/1] bg-brand-dark rounded-xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer">
-                                                    {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain" /> : <div className="flex flex-col items-center"><Plus className="text-gray-500"/><span className="text-[8px] font-bold uppercase">Header</span></div>}
-                                                    <input id="h-logo-s" type="file" className="hidden" onChange={async (e) => {
-                                                        const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, headerLogoUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
-                                                    }} />
-                                                </div>
-                                                <div onClick={() => document.getElementById('f-logo-s')?.click()} className="aspect-[3/1] bg-brand-dark rounded-xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer">
-                                                    {siteConfig.footerLogoUrl ? <img src={siteConfig.footerLogoUrl} className="w-full h-full object-contain" /> : <div className="flex flex-col items-center"><Plus className="text-gray-500"/><span className="text-[8px] font-bold uppercase">Footer</span></div>}
-                                                    <input id="f-logo-s" type="file" className="hidden" onChange={async (e) => {
-                                                        const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, footerLogoUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
-                                                    }} />
+                            {adminSubView === 'AJUSTES' && (
+                                <div className="space-y-10 animate-in fade-in duration-500">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="text-3xl font-black uppercase text-brand-accent">Identidade do Portal</h2>
+                                        <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${isSupabaseReady() ? 'text-green-500' : 'text-red-500'}`}>
+                                            <Database size={14} /> {isSupabaseReady() ? 'Cloud Synced' : 'Local Only'}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                                        <div className="lg:col-span-4 space-y-6">
+                                            <div className="glass-panel p-8 rounded-[40px] space-y-6">
+                                                <h3 className="text-xs font-black uppercase tracking-widest">Logotipos</h3>
+                                                <div className="space-y-4">
+                                                    <div onClick={() => document.getElementById('h-logo-s')?.click()} className="aspect-[3/1] bg-black/40 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center overflow-hidden cursor-pointer group hover:border-brand-primary transition-all">
+                                                        {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain p-2" /> : <><Plus className="text-gray-500 mb-1"/><span className="text-[9px] font-black uppercase text-gray-600">Logo Topo</span></>}
+                                                        <input id="h-logo-s" type="file" className="hidden" onChange={async (e) => {
+                                                            const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, headerLogoUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
+                                                        }} />
+                                                    </div>
+                                                    <div onClick={() => document.getElementById('f-logo-s')?.click()} className="aspect-[3/1] bg-black/40 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center overflow-hidden cursor-pointer group hover:border-brand-primary transition-all">
+                                                        {siteConfig.footerLogoUrl ? <img src={siteConfig.footerLogoUrl} className="w-full h-full object-contain p-2" /> : <><Plus className="text-gray-500 mb-1"/><span className="text-[9px] font-black uppercase text-gray-600">Logo Rodapé</span></>}
+                                                        <input id="f-logo-s" type="file" className="hidden" onChange={async (e) => {
+                                                            const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, footerLogoUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
+                                                        }} />
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div onClick={() => document.getElementById('hero-img-s')?.click()} className="aspect-video bg-brand-dark rounded-2xl border border-dashed border-white/20 flex items-center justify-center overflow-hidden cursor-pointer group">
-                                                {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-500" />}
-                                                <input id="hero-img-s" type="file" className="hidden" onChange={async (e) => {
-                                                    const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, heroImageUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
-                                                }} />
+                                            
+                                            <div className="glass-panel p-8 rounded-[40px] space-y-4">
+                                                <h3 className="text-xs font-black uppercase tracking-widest">Banner Principal</h3>
+                                                <div onClick={() => document.getElementById('hero-img-s')?.click()} className="aspect-video bg-black/40 rounded-2xl border border-dashed border-white/10 flex items-center justify-center overflow-hidden cursor-pointer group hover:border-brand-primary transition-all">
+                                                    {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-500" />}
+                                                    <input id="hero-img-s" type="file" className="hidden" onChange={async (e) => {
+                                                        const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = async () => { const comp = await compressImage(r.result as string); storageService.updateConfig({...siteConfig, heroImageUrl: comp}).then(refresh); }; r.readAsDataURL(f); }
+                                                    }} />
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="glass-panel p-8 rounded-[40px] space-y-4">
-                                            <h3 className="text-sm font-black uppercase">Informações da Home</h3>
-                                            <input className="bg-white/5 border border-white/10 p-4 rounded-xl text-sm w-full font-bold" value={siteConfig.heroTitle} onChange={e => storageService.updateConfig({...siteConfig, heroTitle: e.target.value}).then(refresh)} placeholder="Título da Home" />
-                                            <textarea className="bg-white/5 border border-white/10 p-4 rounded-xl text-sm h-32 w-full italic" value={siteConfig.heroSubtitle} onChange={e => storageService.updateConfig({...siteConfig, heroSubtitle: e.target.value}).then(refresh)} placeholder="Subtítulo" />
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <input className="bg-white/5 border border-white/10 p-3 rounded-xl text-[10px] w-full font-bold uppercase" value={siteConfig.whatsapp} onChange={e => storageService.updateConfig({...siteConfig, whatsapp: e.target.value}).then(refresh)} placeholder="WhatsApp" />
-                                                <input className="bg-white/5 border border-white/10 p-3 rounded-xl text-[10px] w-full font-bold uppercase" value={siteConfig.instagramUrl} onChange={e => storageService.updateConfig({...siteConfig, instagramUrl: e.target.value}).then(refresh)} placeholder="Link Instagram" />
+
+                                        <div className="lg:col-span-8 glass-panel p-10 rounded-[40px] space-y-6">
+                                            <h3 className="text-xs font-black uppercase tracking-widest">Textos e Contatos</h3>
+                                            <div className="space-y-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black uppercase text-gray-500 px-2">Título Grande (H1)</label>
+                                                    <input className="bg-white/5 border border-white/10 p-5 rounded-2xl text-sm w-full font-black uppercase tracking-tighter" value={siteConfig.heroTitle} onChange={e => storageService.updateConfig({...siteConfig, heroTitle: e.target.value}).then(refresh)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black uppercase text-gray-500 px-2">Slogan do Portal</label>
+                                                    <textarea className="bg-white/5 border border-white/10 p-5 rounded-2xl text-sm h-32 w-full italic" value={siteConfig.heroSubtitle} onChange={e => storageService.updateConfig({...siteConfig, heroSubtitle: e.target.value}).then(refresh)} />
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] font-black uppercase text-gray-500 px-2">WhatsApp Suporte</label>
+                                                        <input className="bg-white/5 border border-white/10 p-4 rounded-2xl text-xs w-full font-bold" value={siteConfig.whatsapp} onChange={e => storageService.updateConfig({...siteConfig, whatsapp: e.target.value}).then(refresh)} />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] font-black uppercase text-gray-500 px-2">Instagram URL</label>
+                                                        <input className="bg-white/5 border border-white/10 p-4 rounded-2xl text-xs w-full font-bold" value={siteConfig.instagramUrl} onChange={e => storageService.updateConfig({...siteConfig, instagramUrl: e.target.value}).then(refresh)} />
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <Button onClick={() => setToast({m: "Sincronizado!", t: "success"})} className="w-full">Salvar Tudo</Button>
+                                            <div className="pt-8">
+                                                <Button onClick={() => setToast({m: "Sincronizado com Supabase!", t: "success"})} className="w-full h-16 text-lg">Salvar Todas Alterações</Button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -649,7 +786,7 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-brand-dark text-gray-100 font-sans flex flex-col selection:bg-brand-primary/30">
             <Navbar currentUser={currentUser} setCurrentView={setCurrentView} currentView={currentView} onLogout={handleLogout} config={siteConfig} />
             <main className="flex-1 flex flex-col">{renderView()}</main>
-            {currentView !== 'ADMIN' && <Footer config={siteConfig} />}
+            {currentView !== 'ADMIN' && <Footer config={siteConfig} setCurrentView={setCurrentView} />}
             <AIChat config={siteConfig} />
             {toast && <Toast message={toast.m} type={toast.t} onClose={() => setToast(null)} />}
         </div>

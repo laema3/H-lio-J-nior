@@ -50,7 +50,8 @@ export const db = {
   // Posts / Anúncios
   async getPosts() {
     if (!supabase) return [];
-    const { data, error } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+    // Usando "createdAt" entre aspas duplas para respeitar o Case Sensitivity do PostgreSQL quando definido via SQL
+    const { data, error } = await supabase.from('posts').select('*').order('createdAt', { ascending: false });
     return error ? [] : data;
   },
   async addPost(post: any) {
@@ -74,7 +75,7 @@ export const db = {
   },
   async saveCategories(categories: string[]) {
     if (!supabase) return;
-    // Remove antigas e insere novas (estratégia simples)
+    // Remove antigas e insere novas
     await supabase.from('categories').delete().neq('name', '___');
     await supabase.from('categories').insert(categories.map(name => ({ name })));
   }

@@ -52,50 +52,68 @@ export const storageService = {
   },
 
   async getConfig(): Promise<SiteConfig> {
-    const remote = await db.getConfig();
-    if (remote) {
+    try {
+      const remote = await db.getConfig();
+      if (remote) {
         saveToLocal(STORAGE_KEYS.CONFIG, remote);
         return remote;
+      }
+    } catch (e) {
+      console.warn("Supabase Offline, usando LocalStorage para Config");
     }
     return getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
   },
   
   async updateConfig(config: SiteConfig) {
     saveToLocal(STORAGE_KEYS.CONFIG, config);
-    await db.updateConfig(config);
+    if (isSupabaseReady()) {
+      await db.updateConfig(config);
+    }
   },
 
   async getCategories(): Promise<string[]> {
-    const remote = await db.getCategories();
-    if (remote && remote.length > 0) {
+    try {
+      const remote = await db.getCategories();
+      if (remote && remote.length > 0) {
         saveToLocal(STORAGE_KEYS.CATEGORIES, remote);
         return remote;
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar categorias remotas");
     }
     return getFromLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
   },
 
   async saveCategories(categories: string[]) {
     saveToLocal(STORAGE_KEYS.CATEGORIES, categories);
-    await db.saveCategories(categories);
+    if (isSupabaseReady()) {
+      await db.saveCategories(categories);
+    }
   },
 
   async getUsers(): Promise<User[]> {
     const remote = await db.getUsers();
-    if (remote && remote.length > 0) return remote;
+    if (remote && remote.length > 0) {
+      saveToLocal(STORAGE_KEYS.USERS, remote);
+      return remote;
+    }
     return getFromLocal(STORAGE_KEYS.USERS, []);
   },
   
   async getPosts(): Promise<Post[]> {
     const remote = await db.getPosts();
-    if (remote && remote.length > 0) return remote;
+    if (remote && remote.length > 0) {
+      saveToLocal(STORAGE_KEYS.POSTS, remote);
+      return remote;
+    }
     return getFromLocal(STORAGE_KEYS.POSTS, []);
   },
 
   async findUserByEmail(email: string): Promise<User | undefined> {
-    // Admin Master sempre disponível via código se Supabase falhar
     if (email.toLowerCase() === 'admin@helio.com') {
       return { id: 'admin', name: 'Administrador', email: 'admin@helio.com', role: UserRole.ADMIN, paymentStatus: PaymentStatus.NOT_APPLICABLE, createdAt: new Date().toISOString() };
     }
+    
     const remote = await db.findUserByEmail(email);
     if (remote) return remote;
     
@@ -107,14 +125,18 @@ export const storageService = {
     const newUser: User = { ...userData, id: 'u-' + Date.now(), createdAt: new Date().toISOString() };
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     saveToLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-    await db.updateUser(newUser);
+    if (isSupabaseReady()) {
+      await db.updateUser(newUser);
+    }
     return newUser;
   },
 
   async updateUser(updatedUser: User) {
-    await db.updateUser(updatedUser);
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     saveToLocal(STORAGE_KEYS.USERS, users.map((u: User) => u.id === updatedUser.id ? updatedUser : u));
+    if (isSupabaseReady()) {
+      await db.updateUser(updatedUser);
+    }
     const session = getFromLocal(STORAGE_KEYS.SESSION, null);
     if (session && session.id === updatedUser.id) saveToLocal(STORAGE_KEYS.SESSION, updatedUser);
   },
@@ -122,20 +144,24 @@ export const storageService = {
   async addPost(post: Post) {
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, [post, ...posts]);
-    await db.addPost(post);
+    if (isSupabaseReady()) {
+      await db.addPost(post);
+    }
   },
 
   async deletePost(id: string) {
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, posts.filter((p: Post) => p.id !== id));
-    await db.deletePost(id);
+    if (isSupabaseReady()) {
+      await db.deletePost(id);
+    }
   },
 
   getPlans(): Plan[] {
-    return getFromLocal(STORAGE_KEYS.PLANS, [
+    return [
         { id: 'p_mon', name: 'Mensal', price: 49.90, durationDays: 30, description: 'Plano de 30 dias' },
         { id: 'p_tri', name: 'Trimestral', price: 129.90, durationDays: 90, description: 'Plano de 90 dias' },
         { id: 'p_ann', name: 'Anual', price: 399.90, durationDays: 365, description: 'Plano de 365 dias' }
-    ]);
+    ];
   }
 };
