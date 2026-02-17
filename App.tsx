@@ -1,18 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
-import { ViewState, User, UserRole, Post, ProfessionCategory, PaymentStatus, SiteConfig, Plan, PaymentMethodType } from './types';
-import { storageService } from './services/storage';
+import { ViewState, User, UserRole, Post, ProfessionCategory, PaymentStatus, SiteConfig, Plan } from './types';
+// Fixed: Added DEFAULT_CONFIG to imports
+import { storageService, DEFAULT_CONFIG } from './services/storage';
 import { Button } from './components/Button';
 import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { 
-    Sparkles, 
     Search,
     CreditCard,
-    Upload,
     Clock,
-    Smartphone,
     Check,
     Camera,
     Loader2,
@@ -20,9 +18,10 @@ import {
     Edit3,
     AlertTriangle,
     Plus,
-    ChevronRight,
     X,
-    Info
+    Info,
+    Gift,
+    FileText
 } from 'lucide-react';
 
 // --- Utils ---
@@ -58,13 +57,18 @@ const Toast: React.FC<{ message: string, type: 'success' | 'error', onClose: () 
 const HomeView: React.FC<{ 
   posts: Post[], 
   users: User[],
+  currentUser: User | null,
   config: SiteConfig,
   filterCategory: string, 
   setFilterCategory: (c: string) => void,
   onStartAdvertising: () => void
-}> = ({ posts, users, config, filterCategory, setFilterCategory, onStartAdvertising }) => {
+}> = ({ posts, users, currentUser, config, filterCategory, setFilterCategory, onStartAdvertising }) => {
     
     const visiblePosts = posts.filter(post => {
+      if (post.authorId === 'admin') return true;
+      if (currentUser && post.authorId === currentUser.id) {
+          return currentUser.role === UserRole.ADMIN || currentUser.paymentStatus === PaymentStatus.CONFIRMED;
+      }
       const author = users.find(u => u.id === post.authorId);
       return author && (author.role === UserRole.ADMIN || author.paymentStatus === PaymentStatus.CONFIRMED);
     });
@@ -93,7 +97,7 @@ const HomeView: React.FC<{
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                                 <Button onClick={() => window.scrollTo({ top: document.getElementById('ads-section')?.offsetTop, behavior: 'smooth' })} variant="primary" className="py-5 px-12 text-lg">Ver Classificados</Button>
-                                <Button onClick={onStartAdvertising} variant="outline" className="py-5 px-12 text-lg">Anunciar minha empresa</Button>
+                                <Button onClick={() => onStartAdvertising()} variant="outline" className="py-5 px-12 text-lg">Anunciar minha empresa</Button>
                             </div>
                         </div>
 
@@ -173,7 +177,7 @@ const AuthView: React.FC<{
                 onLogin(newUser);
             }
         } catch (e: any) {
-            setError('Erro: ' + (e.message || 'Verifique sua conexão ou se o Supabase está configurado.'));
+            setError('Erro ao processar. Tente novamente.');
         } finally {
             setIsLoading(false);
         }
@@ -203,16 +207,25 @@ const AuthView: React.FC<{
     );
 };
 
-const DashboardView: React.FC<{ user: User, onGoToPayment: () => void, onPostCreated: (p: Post) => Promise<void> }> = ({ user, onGoToPayment, onPostCreated }) => {
+const DashboardView: React.FC<{ 
+    user: User, 
+    posts: Post[],
+    onGoToPayment: () => void, 
+    onPostCreated: (p: Post) => Promise<void>,
+    onPostUpdated: (p: Post) => Promise<void>,
+    onPostDeleted: (id: string) => Promise<void>
+}> = ({ user, posts, onGoToPayment, onPostCreated, onPostUpdated, onPostDeleted }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [keywords, setKeywords] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isConfirmed = user.paymentStatus === PaymentStatus.CONFIRMED;
+    const userPosts = posts.filter(p => p.authorId === user.id);
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -231,51 +244,119 @@ const DashboardView: React.FC<{ user: User, onGoToPayment: () => void, onPostCre
         setIsGenerating(false);
     };
 
+    const handleEdit = (post: Post) => {
+        setEditingPost(post);
+        setTitle(post.title);
+        setContent(post.content);
+        setImageUrl(post.imageUrl || '');
+        setKeywords('');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingPost(null);
+        setTitle(''); setContent(''); setImageUrl(''); setKeywords('');
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isConfirmed) return onGoToPayment();
         setIsSubmitting(true);
-        await onPostCreated({
-            id: Date.now().toString(),
-            authorId: user.id,
-            authorName: user.name,
-            category: user.profession || ProfessionCategory.OTHER,
-            title, content, imageUrl, createdAt: new Date().toISOString(), likes: 0
-        });
+        
+        if (editingPost) {
+            await onPostUpdated({ ...editingPost, title, content, imageUrl });
+            setEditingPost(null);
+        } else {
+            await onPostCreated({
+                id: 'post-' + Date.now(),
+                authorId: user.id,
+                authorName: user.name,
+                category: user.profession || ProfessionCategory.OTHER,
+                title, content, imageUrl, createdAt: new Date().toISOString(), likes: 0
+            });
+        }
+        
         setTitle(''); setContent(''); setImageUrl(''); setKeywords('');
         setIsSubmitting(false);
     };
 
     return (
-        <div className="pt-24 pb-20 max-w-4xl mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2 glass-panel p-8 rounded-3xl">
-                    <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Plus /> Criar Anúncio</h2>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <input required placeholder="Título do Anúncio" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white" value={title} onChange={e => setTitle(e.target.value)} />
-                        <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-                            <label className="text-[10px] font-bold text-brand-accent uppercase mb-2 block">Escrever com IA</label>
-                            <div className="flex gap-2">
-                                <input placeholder="Ex: pintura rápida, preço justo..." className="flex-1 bg-white/5 border border-white/10 rounded-lg p-2 text-sm" value={keywords} onChange={e => setKeywords(e.target.value)} />
-                                <button type="button" onClick={handleGenerateIA} disabled={isGenerating} className="bg-brand-primary px-3 rounded-lg text-xs font-bold">{isGenerating ? '...' : 'GERAR'}</button>
+        <div className="pt-24 pb-20 max-w-6xl mx-auto px-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="lg:col-span-8 space-y-8">
+                    <div className="glass-panel p-8 rounded-3xl">
+                        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                            {editingPost ? <Edit3 className="text-brand-accent" /> : <Plus />} 
+                            {editingPost ? 'Editar Anúncio' : 'Novo Anúncio'}
+                        </h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <input required placeholder="Título do Anúncio" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white focus:border-brand-primary outline-none" value={title} onChange={e => setTitle(e.target.value)} />
+                            <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
+                                <label className="text-[10px] font-bold text-brand-accent uppercase mb-2 block">Escrever com IA</label>
+                                <div className="flex gap-2">
+                                    <input placeholder="Ex: pintura rápida, preço justo..." className="flex-1 bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-brand-primary outline-none" value={keywords} onChange={e => setKeywords(e.target.value)} />
+                                    <button type="button" onClick={handleGenerateIA} disabled={isGenerating} className="bg-brand-primary px-3 rounded-lg text-xs font-bold hover:bg-brand-primary/80 transition-colors">{isGenerating ? '...' : 'GERAR'}</button>
+                                </div>
                             </div>
-                        </div>
-                        <textarea required placeholder="Descrição..." className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white h-32" value={content} onChange={e => setContent(e.target.value)} />
-                        <div onClick={() => fileInputRef.current?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex items-center justify-center cursor-pointer overflow-hidden">
-                            {imageUrl ? <img src={imageUrl} className="w-full h-full object-cover" /> : <div className="text-center text-gray-500"><Camera className="mx-auto mb-2" /> Foto do Anúncio</div>}
-                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoChange} />
-                        </div>
-                        <Button type="submit" isLoading={isSubmitting} className="w-full">{isConfirmed ? 'PUBLICAR' : 'PAGAR PARA PUBLICAR'}</Button>
-                    </form>
-                </div>
-                <div className="glass-panel p-6 rounded-3xl h-fit">
-                    <h3 className="font-bold mb-4 flex items-center gap-2"><CreditCard size={18}/> Assinatura</h3>
-                    <div className="p-4 bg-white/5 rounded-2xl border border-white/10 mb-4 text-center">
-                        <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Status</p>
-                        <span className={`text-xs font-bold ${isConfirmed ? 'text-green-400' : 'text-yellow-400'}`}>{user.paymentStatus}</span>
-                        {isConfirmed && <p className="text-[10px] text-brand-accent mt-2 font-bold">{getDaysRemaining(user.paymentConfirmedAt)} dias restantes</p>}
+                            <textarea required placeholder="Descrição..." className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white h-32 focus:border-brand-primary outline-none" value={content} onChange={e => setContent(e.target.value)} />
+                            <div onClick={() => fileInputRef.current?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex items-center justify-center cursor-pointer overflow-hidden group hover:border-brand-primary/50 transition-colors">
+                                {imageUrl ? <img src={imageUrl} className="w-full h-full object-cover" /> : <div className="text-center text-gray-500"><Camera className="mx-auto mb-2 group-hover:text-brand-primary transition-colors" /> Foto do Anúncio</div>}
+                                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoChange} />
+                            </div>
+                            <div className="flex gap-3">
+                                <Button type="submit" isLoading={isSubmitting} className="flex-1">
+                                    {!isConfirmed ? 'PAGAR PARA PUBLICAR' : (editingPost ? 'ATUALIZAR ANÚNCIO' : 'PUBLICAR AGORA')}
+                                </Button>
+                                {editingPost && <Button type="button" variant="outline" onClick={handleCancelEdit}>CANCELAR</Button>}
+                            </div>
+                        </form>
                     </div>
-                    {!isConfirmed && <Button onClick={onGoToPayment} variant="secondary" className="w-full text-xs">ASSINAR AGORA</Button>}
+
+                    <div className="space-y-4">
+                        <h3 className="text-xl font-bold flex items-center gap-2"><FileText size={20} className="text-brand-secondary"/> Meus Anúncios ({userPosts.length})</h3>
+                        {userPosts.length === 0 ? (
+                            <div className="p-12 glass-panel rounded-3xl text-center border-dashed border-white/5">
+                                <p className="text-gray-500 text-sm">Você ainda não criou nenhum anúncio.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {userPosts.map(post => (
+                                    <div key={post.id} className="glass-panel p-4 rounded-2xl flex gap-4 group">
+                                        <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-brand-dark">
+                                            <img src={post.imageUrl || `https://picsum.photos/200/200?random=${post.id}`} className="w-full h-full object-cover" alt={post.title} />
+                                        </div>
+                                        <div className="flex flex-col justify-between flex-grow min-w-0">
+                                            <div>
+                                                <h4 className="font-bold text-white text-sm truncate">{post.title}</h4>
+                                                <p className="text-[10px] text-gray-500 line-clamp-2 mt-1">{post.content}</p>
+                                            </div>
+                                            <div className="flex gap-2 mt-2">
+                                                <button onClick={() => handleEdit(post)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all"><Edit3 size={14} /></button>
+                                                <button onClick={() => confirm("Deseja excluir?") && onPostDeleted(post.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all"><Trash2 size={14} /></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="lg:col-span-4 space-y-6">
+                    <div className="glass-panel p-6 rounded-3xl h-fit">
+                        <h3 className="font-bold mb-4 flex items-center gap-2 text-brand-accent"><CreditCard size={18}/> Assinatura</h3>
+                        <div className="p-4 bg-white/5 rounded-2xl border border-white/10 mb-4 text-center">
+                            <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Status do Perfil</p>
+                            <span className={`text-xs font-bold ${isConfirmed ? 'text-green-400' : 'text-yellow-400'}`}>{user.paymentStatus}</span>
+                            {isConfirmed && (
+                                <div className="mt-3 flex items-center justify-center gap-2 text-brand-accent bg-brand-accent/5 py-1 px-3 rounded-full border border-brand-accent/10">
+                                    <Clock size={12} />
+                                    <p className="text-[10px] font-bold uppercase">{getDaysRemaining(user.paymentConfirmedAt)} dias restantes</p>
+                                </div>
+                            )}
+                        </div>
+                        {!isConfirmed && <Button onClick={onGoToPayment} variant="secondary" className="w-full text-xs py-3">ASSINAR AGORA</Button>}
+                    </div>
                 </div>
             </div>
         </div>
@@ -283,51 +364,43 @@ const DashboardView: React.FC<{ user: User, onGoToPayment: () => void, onPostCre
 };
 
 const PaymentView: React.FC<{ user: User, plans: Plan[], onCancel: () => void, onPaymentSuccess: (pid: string) => Promise<void> }> = ({ plans, onCancel, onPaymentSuccess }) => {
-    const [step, setStep] = useState<'PLANS' | 'METHOD' | 'PIX'>('PLANS');
+    const [step, setStep] = useState<'PLANS' | 'CHECKOUT'>('PLANS');
     const [selected, setSelected] = useState<Plan | null>(null);
 
     return (
         <div className="pt-24 pb-20 max-w-4xl mx-auto px-4">
             {step === 'PLANS' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {plans.map(p => (
-                        <div key={p.id} className="glass-panel p-8 rounded-[40px] text-center flex flex-col border border-white/10 hover:border-brand-primary transition-all">
+                        <div key={p.id} className="glass-panel p-8 rounded-[40px] text-center flex flex-col border border-white/10 hover:border-brand-primary transition-all relative overflow-hidden group">
+                            {p.price === 0 && <div className="absolute top-4 right-[-30px] bg-brand-accent text-brand-dark font-bold text-[8px] px-8 py-1 rotate-45 uppercase">Grátis</div>}
                             <h3 className="text-xl font-bold mb-2">{p.name}</h3>
-                            <p className="text-4xl font-black text-brand-accent mb-4">R$ {p.price.toFixed(2)}</p>
+                            <p className="text-3xl font-black text-brand-accent mb-4">{p.price === 0 ? 'GRÁTIS' : `R$ ${p.price.toFixed(2)}`}</p>
                             <p className="text-xs text-gray-400 mb-8 flex-grow">{p.description}</p>
-                            <Button onClick={() => { setSelected(p); setStep('METHOD'); }}>ESCOLHER</Button>
+                            <Button onClick={() => { setSelected(p); setStep('CHECKOUT'); }} variant={p.price === 0 ? 'secondary' : 'primary'}>SELECIONAR</Button>
                         </div>
                     ))}
-                    {plans.length === 0 && (
-                        <div className="col-span-3 text-center py-12">
-                            <p className="text-gray-500">Nenhum plano cadastrado pelo administrador.</p>
-                            <Button variant="outline" className="mt-4" onClick={onCancel}>VOLTAR</Button>
+                    {plans.length === 0 && <Button variant="outline" onClick={onCancel}>VOLTAR</Button>}
+                </div>
+            )}
+            
+            {step === 'CHECKOUT' && selected && (
+                <div className="max-w-md mx-auto glass-panel p-8 rounded-[40px] text-center">
+                    <h3 className="text-2xl font-bold mb-2">{selected.name}</h3>
+                    {selected.price === 0 ? (
+                        <div className="py-12 flex flex-col items-center">
+                            <Gift className="text-brand-accent w-20 h-20 mb-6 animate-bounce" />
+                            <Button onClick={() => onPaymentSuccess(selected.id)} className="w-full py-4 text-lg">ATIVAR AGORA</Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="bg-white p-4 rounded-3xl w-48 h-48 mx-auto mb-6">
+                                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=SIMULATE_PIX_${selected.id}`} alt="QR" className="w-full h-full" />
+                            </div>
+                            <Button onClick={() => onPaymentSuccess(selected.id)} className="w-full py-4">CONFIRMAR PAGAMENTO</Button>
                         </div>
                     )}
-                </div>
-            )}
-            {step === 'METHOD' && (
-                <div className="max-w-md mx-auto glass-panel p-8 rounded-[40px] text-center">
-                    <h3 className="text-2xl font-bold mb-8">Forma de Pagamento</h3>
-                    <button onClick={() => setStep('PIX')} className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between hover:bg-white/10 mb-4 transition-all">
-                        <div className="flex items-center gap-3 font-bold"><Smartphone className="text-brand-accent" /> PIX (Instantâneo)</div>
-                        <ChevronRight />
-                    </button>
-                    <button className="w-full p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between opacity-50 cursor-not-allowed">
-                        <div className="flex items-center gap-3 font-bold"><CreditCard /> Cartão de Crédito</div>
-                        <span className="text-[8px] bg-white/10 px-2 py-1 rounded">EM BREVE</span>
-                    </button>
                     <button onClick={() => setStep('PLANS')} className="mt-6 text-gray-500 text-xs hover:underline">Voltar</button>
-                </div>
-            )}
-            {step === 'PIX' && selected && (
-                <div className="max-w-md mx-auto glass-panel p-8 rounded-[40px] text-center">
-                    <h3 className="text-2xl font-bold mb-4">Pagar R$ {selected.price.toFixed(2)}</h3>
-                    <div className="bg-white p-4 rounded-3xl w-48 h-48 mx-auto mb-6">
-                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=SIMULATE_PIX_${selected.id}`} alt="QR" className="w-full h-full" />
-                    </div>
-                    <Button onClick={async () => { await onPaymentSuccess(selected.id); }} className="w-full">JÁ PAGUEI</Button>
-                    <button onClick={() => setStep('METHOD')} className="mt-4 text-gray-500 text-xs hover:underline">Alterar forma</button>
                 </div>
             )}
         </div>
@@ -346,95 +419,32 @@ const AdminView: React.FC<{
     const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
     const [newPlan, setNewPlan] = useState<Partial<Plan>>({ name: '', price: 0, description: '' });
     const [isProcessing, setIsProcessing] = useState(false);
-    const [planToDelete, setPlanToDelete] = useState<string | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
-
-    const handleAddPlan = async () => {
-        if (!newPlan.name || !newPlan.price) {
-            notify("Preencha nome e preço do plano!", "error");
-            return;
-        }
-        setIsProcessing(true);
-        try {
-            const plan: Plan = {
-                id: 'plan-' + Date.now(),
-                name: newPlan.name,
-                price: newPlan.price,
-                description: newPlan.description || ''
-            };
-            await onUpdatePlans([...plans, plan]);
-            setNewPlan({ name: '', price: 0, description: '' });
-            notify("Plano cadastrado com sucesso!", "success");
-        } catch (e) {
-            notify("Erro ao cadastrar plano.", "error");
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    const handleUpdatePlan = async () => {
-        if (!editingPlan) return;
-        setIsProcessing(true);
-        try {
-            const updated = plans.map(p => p.id === editingPlan.id ? editingPlan : p);
-            await onUpdatePlans(updated);
-            setEditingPlan(null);
-            notify("Plano atualizado com sucesso!", "success");
-        } catch (e) {
-            notify("Erro ao atualizar plano.", "error");
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    const confirmDeletePlan = async () => {
-        if (!planToDelete) return;
-        setIsProcessing(true);
-        try {
-            await onUpdatePlans(plans.filter(p => p.id !== planToDelete));
-            setPlanToDelete(null);
-            notify("Plano removido com sucesso.", "success");
-        } catch (e) {
-            notify("Erro ao remover plano.", "error");
-        } finally {
-            setIsProcessing(false);
-        }
-    };
 
     return (
         <div className="pt-24 pb-20 max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-center mb-10">
                 <h2 className="text-3xl font-bold">Administração</h2>
                 <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-                    <button onClick={() => setTab('U')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'U' ? 'bg-brand-primary text-white' : 'text-gray-400'}`}>USUÁRIOS</button>
-                    <button onClick={() => setTab('P')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'P' ? 'bg-brand-primary text-white' : 'text-gray-400'}`}>PLANOS</button>
-                    <button onClick={() => setTab('C')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'C' ? 'bg-brand-primary text-white' : 'text-gray-400'}`}>SITE</button>
+                    <button onClick={() => setTab('U')} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === 'U' ? 'bg-brand-primary' : ''}`}>USUÁRIOS</button>
+                    <button onClick={() => setTab('P')} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === 'P' ? 'bg-brand-primary' : ''}`}>PLANOS</button>
+                    <button onClick={() => setTab('C')} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === 'C' ? 'bg-brand-primary' : ''}`}>SITE</button>
                 </div>
             </div>
 
             {tab === 'U' && (
-                <div className="glass-panel rounded-3xl overflow-hidden border border-white/10 animate-in fade-in duration-500">
+                <div className="glass-panel rounded-3xl overflow-hidden">
                     <table className="w-full text-left">
-                        <thead className="bg-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-widest">
-                            <tr><th className="px-6 py-4">Nome / Empresa</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Ação</th></tr>
+                        <thead className="bg-white/5 text-[10px] text-gray-500 uppercase font-bold">
+                            <tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Ação</th></tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {users.filter(u => u.role !== UserRole.ADMIN).map(u => (
-                                <tr key={u.id} className="hover:bg-white/5 transition-colors">
-                                    <td className="px-6 py-4 font-bold text-sm">
-                                        {u.name}
-                                        <p className="text-[10px] font-normal text-gray-500">{u.email}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase border ${
-                                            u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                                        }`}>{u.paymentStatus}</span>
-                                    </td>
+                                <tr key={u.id}>
+                                    <td className="px-6 py-4 text-sm font-bold">{u.name}<p className="text-[10px] font-normal text-gray-500">{u.email}</p></td>
+                                    <td className="px-6 py-4 text-xs">{u.paymentStatus}</td>
                                     <td className="px-6 py-4 text-right">
-                                        <button onClick={() => {
-                                            onUpdateUser({...u, paymentStatus: u.paymentStatus === PaymentStatus.CONFIRMED ? PaymentStatus.AWAITING : PaymentStatus.CONFIRMED});
-                                            notify(`Status de ${u.name} alterado!`, "success");
-                                        }} className="p-2 bg-brand-primary/10 rounded-lg text-brand-primary hover:bg-brand-primary hover:text-white transition-all"><Edit3 size={14} /></button>
+                                        <button onClick={() => onUpdateUser({...u, paymentStatus: u.paymentStatus === PaymentStatus.CONFIRMED ? PaymentStatus.AWAITING : PaymentStatus.CONFIRMED})} className="p-2 bg-brand-primary/10 rounded-lg"><Edit3 size={14} /></button>
                                     </td>
                                 </tr>
                             ))}
@@ -442,122 +452,13 @@ const AdminView: React.FC<{
                     </table>
                 </div>
             )}
-
-            {tab === 'P' && (
-                <div className="space-y-6 animate-in fade-in duration-500">
-                    <div className="glass-panel p-6 rounded-3xl border border-brand-primary/20">
-                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Plus size={16}/> Novo Plano</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <input placeholder="Nome do Plano" className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-brand-primary outline-none" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} />
-                            <input type="number" placeholder="Preço (R$)" className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-brand-primary outline-none" value={newPlan.price || ''} onChange={e => setNewPlan({...newPlan, price: parseFloat(e.target.value)})} />
-                            <input placeholder="Descrição curta" className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white md:col-span-1 focus:border-brand-primary outline-none" value={newPlan.description} onChange={e => setNewPlan({...newPlan, description: e.target.value})} />
-                            <Button onClick={handleAddPlan} isLoading={isProcessing}>CADASTRAR</Button>
-                        </div>
-                    </div>
-
-                    <div className="glass-panel rounded-3xl overflow-hidden border border-white/10">
-                        <table className="w-full text-left">
-                            <thead className="bg-white/5 text-[10px] text-gray-500 uppercase font-bold tracking-widest">
-                                <tr><th className="px-6 py-4">Plano</th><th className="px-6 py-4">Preço</th><th className="px-6 py-4 text-right">Ações</th></tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {plans.map(p => (
-                                    <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <p className="font-bold text-white">{p.name}</p>
-                                            <p className="text-xs text-gray-400">{p.description}</p>
-                                        </td>
-                                        <td className="px-6 py-4 text-brand-accent font-bold">R$ {p.price.toFixed(2)}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <button onClick={() => setEditingPlan(p)} className="p-2 bg-blue-500/10 rounded-lg text-blue-400 hover:bg-blue-500 hover:text-white transition-all"><Edit3 size={14} /></button>
-                                                <button onClick={() => setPlanToDelete(p.id)} className="p-2 bg-red-500/10 rounded-lg text-red-400 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={14} /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {plans.length === 0 && (
-                                    <tr>
-                                        <td colSpan={3} className="px-6 py-12 text-center text-gray-500">Nenhum plano cadastrado. Use o formulário acima para começar.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
+            
             {tab === 'C' && (
-                <div className="glass-panel p-8 rounded-[40px] grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-500">
+                <div className="glass-panel p-8 rounded-[40px] grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-4">
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-500 uppercase mb-2 block">Título do Destaque</label>
-                            <input placeholder="Título Hero" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white focus:border-brand-primary outline-none" value={siteConf.heroTitle} onChange={e => setSiteConf({...siteConf, heroTitle: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-500 uppercase mb-2 block">Subtítulo explicativo</label>
-                            <textarea placeholder="Subtítulo" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 h-32 text-white focus:border-brand-primary outline-none" value={siteConf.heroSubtitle} onChange={e => setSiteConf({...siteConf, heroSubtitle: e.target.value})} />
-                        </div>
-                        <Button onClick={async () => {
-                             await onUpdateConfig(siteConf);
-                             notify("Configurações do site salvas!", "success");
-                        }} className="w-full py-4">SALVAR ALTERAÇÕES DO SITE</Button>
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-gray-500 uppercase mb-2 block">Foto Principal</label>
-                        <div onClick={() => fileRef.current?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-3xl flex items-center justify-center cursor-pointer overflow-hidden group">
-                            {siteConf.heroImageUrl ? (
-                                <img src={siteConf.heroImageUrl} className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
-                            ) : (
-                                <div className="text-center text-gray-500"><Camera className="mx-auto mb-2" /> Alterar Foto</div>
-                            )}
-                            <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={e => {
-                                const f = e.target.files?.[0];
-                                if (f) { const r = new FileReader(); r.onload = () => setSiteConf({...siteConf, heroImageUrl: r.result as string}); r.readAsDataURL(f); }
-                            }} />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal de Confirmação de Exclusão */}
-            {planToDelete && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-                    <div className="glass-panel w-full max-w-sm p-8 rounded-[40px] border border-red-500/20 text-center">
-                        <Trash2 className="mx-auto text-red-500 mb-4" size={48} />
-                        <h3 className="text-xl font-bold text-white mb-2">Excluir Plano?</h3>
-                        <p className="text-gray-400 text-sm mb-8">Esta ação removerá o plano permanentemente. Usuários assinantes não serão afetados imediatamente.</p>
-                        <div className="flex gap-4">
-                            <Button variant="outline" onClick={() => setPlanToDelete(null)} className="flex-1">CANCELAR</Button>
-                            <Button variant="danger" onClick={confirmDeletePlan} isLoading={isProcessing} className="flex-1">EXCLUIR</Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal de Edição de Plano */}
-            {editingPlan && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="glass-panel w-full max-w-md p-8 rounded-[40px] border border-white/10 shadow-2xl relative">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-2xl font-bold text-white">Editar Plano</h3>
-                            <button onClick={() => setEditingPlan(null)} className="text-gray-500 hover:text-white transition-colors p-1"><X size={20}/></button>
-                        </div>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Nome do Plano</label>
-                                <input placeholder="Nome do Plano" className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:border-brand-primary outline-none" value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Preço (R$)</label>
-                                <input type="number" placeholder="Preço (R$)" className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:border-brand-primary outline-none" value={editingPlan.price} onChange={e => setEditingPlan({...editingPlan, price: parseFloat(e.target.value)})} />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Descrição</label>
-                                <textarea placeholder="Descrição" className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white h-24 focus:border-brand-primary outline-none" value={editingPlan.description} onChange={e => setEditingPlan({...editingPlan, description: e.target.value})} />
-                            </div>
-                            <Button onClick={handleUpdatePlan} className="w-full py-4" isLoading={isProcessing}>SALVAR ALTERAÇÕES</Button>
-                        </div>
+                        <input className="w-full bg-white/5 border border-white/10 rounded-xl p-3" value={siteConf.heroTitle} onChange={e => setSiteConf({...siteConf, heroTitle: e.target.value})} />
+                        <textarea className="w-full bg-white/5 border border-white/10 rounded-xl p-3 h-32" value={siteConf.heroSubtitle} onChange={e => setSiteConf({...siteConf, heroSubtitle: e.target.value})} />
+                        <Button onClick={() => onUpdateConfig(siteConf).then(() => notify("Salvo!", "success"))} className="w-full">SALVAR</Button>
                     </div>
                 </div>
             )}
@@ -571,111 +472,65 @@ const App: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [plans, setPlans] = useState<Plan[]>([]);
-    const [siteConfig, setSiteConfig] = useState<SiteConfig>({
-        heroLabel: 'Hélio Júnior', heroTitle: 'Carregando...', heroSubtitle: 'Sintonizando portal...', heroImageUrl: ''
-    });
+    // Fixed: Using the exported DEFAULT_CONFIG
+    const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_CONFIG);
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
 
-    const notify = (m: string, t: 'success' | 'error') => setToast({ m, t });
-
-    const refreshData = async () => {
+    const refreshData = async (silent = false) => {
+        if (!silent) setIsLoading(true);
         try {
             const [p, u, pl, c] = await Promise.all([
-                storageService.getPosts(),
-                storageService.getUsers(),
-                storageService.getPlans(),
-                storageService.getConfig()
+                storageService.getPosts(), storageService.getUsers(), storageService.getPlans(), storageService.getConfig()
             ]);
-            setPosts(p);
-            setAllUsers(u);
-            setPlans(pl);
-            setSiteConfig(c);
-            
-            // Sync current user session
-            const stored = localStorage.getItem('helio_app_current_user');
+            setPosts(p); setAllUsers(u); setPlans(pl); setSiteConfig(c);
+            const stored = localStorage.getItem('helio_session_v1');
             if (stored) {
                 const parsed = JSON.parse(stored);
                 const fresh = u.find(user => user.id === parsed.id);
-                if (fresh) {
-                    setCurrentUser(fresh);
-                    localStorage.setItem('helio_app_current_user', JSON.stringify(fresh));
-                }
+                if (fresh) setCurrentUser(fresh);
             }
-        } catch (e) {
-            console.warn("Falha ao sincronizar dados remotos.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        const init = async () => {
-            try {
-                await storageService.init();
-                await refreshData();
-            } catch (err) {
-                console.error("Erro na inicialização:", err);
-                setError("Ocorreu um erro ao carregar o portal.");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        init();
+        storageService.init().then(() => refreshData());
     }, []);
 
     const handleLogin = (user: User) => {
-        localStorage.setItem('helio_app_current_user', JSON.stringify(user));
+        localStorage.setItem('helio_session_v1', JSON.stringify(user));
         setCurrentUser(user);
         setCurrentView(user.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD');
-        refreshData();
+        refreshData(true);
     };
 
     const handleLogout = () => {
-        localStorage.removeItem('helio_app_current_user');
+        localStorage.removeItem('helio_session_v1');
         setCurrentUser(null);
         setCurrentView('HOME');
-    };
-
-    if (error) {
-        return (
-            <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
-                <div className="glass-panel p-8 rounded-3xl text-center max-w-sm">
-                    <AlertTriangle className="text-red-500 mb-4 mx-auto" size={48} />
-                    <h2 className="text-white font-bold mb-4">{error}</h2>
-                    <Button onClick={() => window.location.reload()}>Recarregar Site</Button>
-                </div>
-            </div>
-        );
-    }
-
-    const renderView = () => {
-        switch (currentView) {
-            case 'HOME': return <HomeView posts={posts} users={allUsers} config={siteConfig} filterCategory={filterCategory} setFilterCategory={setFilterCategory} onStartAdvertising={() => setCurrentView('REGISTER')} />;
-            case 'LOGIN': return <AuthView mode="LOGIN" onLogin={handleLogin} onSwitchMode={setCurrentView} />;
-            case 'REGISTER': return <AuthView mode="REGISTER" onLogin={handleLogin} onSwitchMode={setCurrentView} />;
-            case 'DASHBOARD': return currentUser ? <DashboardView user={currentUser} onGoToPayment={() => setCurrentView('PAYMENT')} onPostCreated={async p => { await storageService.addPost(p); refreshData(); notify("Postagem enviada!", "success"); }} /> : null;
-            case 'ADMIN': return currentUser?.role === UserRole.ADMIN ? <AdminView users={allUsers} posts={posts} plans={plans} config={siteConfig} onUpdateUser={async u => { await storageService.updateUser(u); refreshData(); }} onUpdateConfig={async c => { await storageService.updateConfig(c); refreshData(); }} onUpdatePlans={async p => { await storageService.updatePlans(p); refreshData(); }} notify={notify} /> : null;
-            case 'PAYMENT': return currentUser ? <PaymentView user={currentUser} plans={plans} onCancel={() => setCurrentView('DASHBOARD')} onPaymentSuccess={async pid => { await storageService.updateUser({...currentUser, planId: pid, paymentStatus: PaymentStatus.CONFIRMED}); await refreshData(); setCurrentView('DASHBOARD'); notify("Assinatura confirmada!", "success"); }} /> : null;
-            default: return <HomeView posts={posts} users={allUsers} config={siteConfig} filterCategory={filterCategory} setFilterCategory={setFilterCategory} onStartAdvertising={() => setCurrentView('REGISTER')} />;
-        }
     };
 
     return (
         <div className="min-h-screen bg-[#0f172a] text-gray-100 font-sans">
             <Navbar currentUser={currentUser} setCurrentView={setCurrentView} currentView={currentView} onLogout={handleLogout} />
             <main className="relative">
-                {isLoading && (
-                    <div className="fixed inset-0 bg-[#0f172a] z-[100] flex items-center justify-center animate-out fade-out duration-700 delay-500 fill-mode-forwards">
-                        <div className="text-center">
-                            <Loader2 className="animate-spin text-brand-primary mx-auto mb-4" size={48} />
-                            <p className="text-xs text-gray-500 animate-pulse">Sintonizando frequências...</p>
-                        </div>
-                    </div>
+                {isLoading && <div className="fixed inset-0 bg-[#0f172a] z-[100] flex items-center justify-center"><Loader2 className="animate-spin text-brand-primary" size={48} /></div>}
+                {currentView === 'HOME' && <HomeView posts={posts} users={allUsers} currentUser={currentUser} config={siteConfig} filterCategory={filterCategory} setFilterCategory={setFilterCategory} onStartAdvertising={() => setCurrentView('REGISTER')} />}
+                {currentView === 'LOGIN' && <AuthView mode="LOGIN" onLogin={handleLogin} onSwitchMode={setCurrentView} />}
+                {currentView === 'REGISTER' && <AuthView mode="REGISTER" onLogin={handleLogin} onSwitchMode={setCurrentView} />}
+                {currentView === 'DASHBOARD' && currentUser && (
+                    <DashboardView 
+                        user={currentUser} posts={posts} onGoToPayment={() => setCurrentView('PAYMENT')} 
+                        onPostCreated={async p => { await storageService.addPost(p); refreshData(true); setToast({ m: "Publicado!", t: "success"}); }}
+                        onPostUpdated={async p => { await storageService.updatePost(p); refreshData(true); setToast({ m: "Atualizado!", t: "success"}); }}
+                        onPostDeleted={async id => { await storageService.deletePost(id); refreshData(true); setToast({ m: "Removido!", t: "success"}); }}
+                    />
                 )}
-                <div className={`${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-1000`}>
-                    {renderView()}
-                </div>
+                {currentView === 'ADMIN' && currentUser?.role === UserRole.ADMIN && <AdminView users={allUsers} posts={posts} plans={plans} config={siteConfig} onUpdateUser={async u => { await storageService.updateUser(u); refreshData(true); }} onUpdateConfig={async c => { await storageService.updateConfig(c); refreshData(true); }} onUpdatePlans={async pl => { await storageService.updatePlans(pl); refreshData(true); }} notify={(m, t) => setToast({ m, t })} />}
+                {currentView === 'PAYMENT' && currentUser && <PaymentView user={currentUser} plans={plans} onCancel={() => setCurrentView('DASHBOARD')} onPaymentSuccess={async pid => { await storageService.updateUser({...currentUser, planId: pid, paymentStatus: PaymentStatus.CONFIRMED, paymentConfirmedAt: new Date().toISOString()}); await refreshData(true); setCurrentView('DASHBOARD'); setToast({ m: "Ativado!", t: "success"}); }} />}
             </main>
             {toast && <Toast message={toast.m} type={toast.t} onClose={() => setToast(null)} />}
         </div>
