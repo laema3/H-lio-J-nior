@@ -23,7 +23,6 @@ export interface SiteConfig {
   heroSubtitle: string;
   heroImageUrl: string;
   heroLabel: string;
-  // Novos campos
   headerLogoUrl?: string;
   footerLogoUrl?: string;
   address?: string;
@@ -32,6 +31,9 @@ export interface SiteConfig {
   instagramUrl?: string;
   facebookUrl?: string;
   youtubeUrl?: string;
+  // Dados Financeiros
+  pixKey?: string;
+  pixName?: string;
 }
 
 export interface User {

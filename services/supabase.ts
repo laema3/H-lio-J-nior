@@ -6,8 +6,8 @@ const getCredentials = () => {
   const localKey = localStorage.getItem('supabase_key_manual');
   
   return {
-    url: process.env.SUPABASE_URL || localUrl || '',
-    key: process.env.SUPABASE_ANON_KEY || localKey || ''
+    url: (localUrl || process.env.SUPABASE_URL || '').trim(),
+    key: (localKey || process.env.SUPABASE_ANON_KEY || '').trim()
   };
 };
 
@@ -15,83 +15,78 @@ const isValidUrl = (u: string) => u && u.startsWith('https://') && u.includes('.
 const isValidKey = (k: string) => k && k.length > 20;
 
 let { url, key } = getCredentials();
-export let supabase = (isValidUrl(url) && isValidKey(key)) ? createClient(url, key) : null;
+export let supabase = (isValidUrl(url) && isValidKey(key)) ? createClient(url, key, {
+  auth: { persistSession: true },
+  global: { headers: { 'x-application-name': 'helio-junior-portal' } }
+}) : null;
 
 export const isSupabaseReady = () => !!supabase;
 
 export const reinitializeSupabase = (newUrl: string, newKey: string) => {
-  if (isValidUrl(newUrl) && isValidKey(newKey)) {
-    localStorage.setItem('supabase_url_manual', newUrl);
-    localStorage.setItem('supabase_key_manual', newKey);
-    url = newUrl;
-    key = newKey;
-    supabase = createClient(newUrl, newKey);
+  const u = newUrl.trim();
+  const k = newKey.trim();
+  if (isValidUrl(u) && isValidKey(k)) {
+    localStorage.setItem('supabase_url_manual', u);
+    localStorage.setItem('supabase_key_manual', k);
+    window.location.reload();
     return true;
   }
   return false;
 };
 
+export const clearSupabaseCredentials = () => {
+  localStorage.removeItem('supabase_url_manual');
+  localStorage.removeItem('supabase_key_manual');
+  window.location.reload();
+};
+
 export const db = {
-  async getDiagnostic() {
-    const { url: currentUrl, key: currentKey } = getCredentials();
-    
-    const checks = {
-      urlValid: isValidUrl(currentUrl),
-      keyValid: isValidKey(currentKey),
-      tableConfig: false,
-      tableProfiles: false,
-      tablePosts: false,
-      connection: false
-    };
-
-    if (!supabase || !checks.urlValid || !checks.keyValid) return checks;
-
-    try {
-      // Teste individual para identificar qual tabela falta
-      const confRes = await supabase.from('site_config').select('id').limit(1);
-      checks.tableConfig = !confRes.error;
-
-      const profRes = await supabase.from('profiles').select('id').limit(1);
-      checks.tableProfiles = !profRes.error;
-
-      const postRes = await supabase.from('posts').select('id').limit(1);
-      checks.tablePosts = !postRes.error;
-
-      checks.connection = checks.tableConfig && checks.tableProfiles && checks.tablePosts;
-    } catch (e) {
-      console.error("Erro no diagnóstico:", e);
-    }
-
-    return checks;
-  },
-
   async testConnection() {
     const logs: string[] = [];
-    const addLog = (msg: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') => {
-      const emoji = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warn' ? '⚠️' : '🔹';
-      logs.push(`${emoji} ${msg}`);
-    };
+    const { url: currentUrl, key: currentKey } = getCredentials();
 
-    const diag = await this.getDiagnostic();
-    
-    if (!diag.urlValid) addLog("A URL do projeto está vazia ou no formato errado.", "error");
-    else addLog("URL do projeto configurada corretamente.", "success");
-
-    if (!diag.keyValid) addLog("A Chave API (Anon Key) está vazia ou é muito curta.", "error");
-    else addLog("Chave API detectada.", "success");
-
-    if (diag.urlValid && diag.keyValid) {
-      if (diag.tableConfig) addLog("Conexão com 'site_config' estabelecida.", "success");
-      else addLog("Tabela 'site_config' não encontrada no banco.", "error");
-
-      if (diag.tableProfiles) addLog("Conexão com 'profiles' estabelecida.", "success");
-      else addLog("Tabela 'profiles' não encontrada no banco.", "error");
-
-      if (diag.tablePosts) addLog("Conexão com 'posts' estabelecida.", "success");
-      else addLog("Tabela 'posts' não encontrada no banco.", "error");
+    if (!isValidUrl(currentUrl)) {
+      logs.push("❌ Erro: URL do Supabase está vazia ou no formato incorreto.");
+      return { success: false, logs };
+    }
+    if (!isValidKey(currentKey)) {
+      logs.push("❌ Erro: A Anon Key (chave) está vazia ou é curta demais.");
+      return { success: false, logs };
     }
 
-    return { success: diag.connection, logs };
+    logs.push("⏳ Tentando conectar ao projeto...");
+
+    try {
+      if (!supabase) throw new Error("Cliente Supabase não inicializado.");
+
+      // Teste de conexão básico consultando uma tabela que deve existir
+      const { data, error } = await supabase.from('site_config').select('id').limit(1);
+
+      if (error) {
+        if (error.message.includes("project not found") || error.message.includes("Invalid API key") || error.code === 'PGRST301') {
+          logs.push("❌ Erro Crítico: 'You do not have access to this project'.");
+          logs.push("👉 Verifique se a URL e a KEY estão corretas e se o projeto não está PAUSADO no site do Supabase.");
+          return { success: false, logs };
+        }
+        
+        if (error.code === '42P01') {
+          logs.push("⚠️ Aviso: Conectado, mas a tabela 'site_config' não existe.");
+          logs.push("👉 Você precisa rodar o script SQL no painel do Supabase.");
+          return { success: false, logs };
+        }
+
+        logs.push(`⚠️ Erro do Supabase: ${error.message} (Código: ${error.code})`);
+        return { success: false, logs };
+      }
+
+      logs.push("✅ Conexão estabelecida com sucesso!");
+      logs.push("✅ Tabelas detectadas e acessíveis.");
+      return { success: true, logs };
+
+    } catch (e: any) {
+      logs.push(`❌ Erro Inesperado: ${e.message}`);
+      return { success: false, logs };
+    }
   },
 
   async getConfig() {
@@ -115,7 +110,7 @@ export const db = {
   },
   async findUserByEmail(email: string) {
     if (!supabase) return null;
-    const { data, error } = await supabase.from('profiles').select('*').eq('email', email).maybeSingle();
+    const { data, error } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).maybeSingle();
     return error ? null : data;
   },
   async getPosts() {

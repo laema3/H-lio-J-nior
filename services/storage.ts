@@ -23,7 +23,9 @@ export const DEFAULT_CONFIG: SiteConfig = {
   whatsapp: '(00) 90000-0000',
   instagramUrl: 'https://instagram.com',
   facebookUrl: 'https://facebook.com',
-  youtubeUrl: 'https://youtube.com'
+  youtubeUrl: 'https://youtube.com',
+  pixKey: '',
+  pixName: ''
 };
 
 export const INITIAL_CATEGORIES = [
@@ -47,36 +49,27 @@ export const getFromLocal = (key: string, defaultValue: any) => {
 
 export const storageService = {
   init: async () => {
-    console.log("🚀 Storage: Inicializando...");
     if (localStorage.getItem(STORAGE_KEYS.CONFIG) === null) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
     if (localStorage.getItem(STORAGE_KEYS.CATEGORIES) === null) saveToLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
   },
 
   async getConfig(): Promise<SiteConfig> {
-    console.group("📥 Storage: Buscando Configuração");
     const local = getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
     if (isSupabaseReady()) {
       try {
         const remote = await db.getConfig();
         if (remote) {
-          console.log("✅ Supabase: Config encontrada. Sincronizando local.");
           saveToLocal(STORAGE_KEYS.CONFIG, remote);
-          console.groupEnd();
-          return remote;
+          return remote as SiteConfig;
         }
-        console.warn("⚠️ Supabase: Tabela vazia. Usando local.");
       } catch (e) {
-        console.error("❌ Supabase: Falha na conexão.", e);
+        console.error("Erro ao buscar config remota");
       }
-    } else {
-      console.log("ℹ️ Storage: Modo Offline. Usando LocalStorage.");
     }
-    console.groupEnd();
     return local;
   },
   
   async updateConfig(config: SiteConfig) {
-    console.log("📤 Storage: Salvando Configuração...");
     saveToLocal(STORAGE_KEYS.CONFIG, config);
     if (isSupabaseReady()) await db.updateConfig(config);
   },
@@ -99,38 +92,30 @@ export const storageService = {
   },
 
   async getUsers(): Promise<User[]> {
-    console.group("📥 Storage: Sincronizando Usuários");
     const local = getFromLocal(STORAGE_KEYS.USERS, []);
     if (isSupabaseReady()) {
       try {
         const remote = await db.getUsers();
         if (remote && remote.length > 0) {
-          console.log(`✅ Supabase: ${remote.length} usuários sincronizados.`);
           saveToLocal(STORAGE_KEYS.USERS, remote);
-          console.groupEnd();
-          return remote;
+          return remote as any[];
         }
-        console.log("ℹ️ Supabase: Nenhum usuário remoto.");
       } catch (e) {
-        console.error("❌ Supabase: Erro na listagem.");
+        console.error("Erro ao buscar usuários");
       }
     }
-    console.groupEnd();
     return local;
   },
   
   async getPosts(): Promise<Post[]> {
-    console.group("📥 Storage: Sincronizando Posts");
     const local = getFromLocal(STORAGE_KEYS.POSTS, []);
     if (isSupabaseReady()) {
       const remote = await db.getPosts();
       if (remote && remote.length > 0) {
         saveToLocal(STORAGE_KEYS.POSTS, remote);
-        console.groupEnd();
-        return remote;
+        return remote as any[];
       }
     }
-    console.groupEnd();
     return local;
   },
 
@@ -140,7 +125,7 @@ export const storageService = {
     }
     if (isSupabaseReady()) {
       const remote = await db.findUserByEmail(email);
-      if (remote) return remote;
+      if (remote) return remote as any;
     }
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     return users.find((u: User) => u.email.toLowerCase() === email.toLowerCase());
@@ -163,7 +148,6 @@ export const storageService = {
   },
 
   async addPost(post: Post) {
-    console.log("📤 Storage: Publicando novo post...");
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, [post, ...posts]);
     if (isSupabaseReady()) await db.addPost(post);
@@ -177,9 +161,10 @@ export const storageService = {
 
   getPlans(): Plan[] {
     return [
-        { id: 'p_mon', name: 'Mensal', price: 49.90, durationDays: 30, description: 'Plano de 30 dias' },
-        { id: 'p_tri', name: 'Trimestral', price: 129.90, durationDays: 90, description: 'Plano de 90 dias' },
-        { id: 'p_ann', name: 'Anual', price: 399.90, durationDays: 365, description: 'Plano de 365 dias' }
+        { id: 'p_free', name: 'Degustação Grátis', price: 0, durationDays: 30, description: 'Experimente o portal por 30 dias sem custos' },
+        { id: 'p_mon', name: 'Mensal', price: 49.90, durationDays: 30, description: 'Exposição por 30 dias no portal' },
+        { id: 'p_tri', name: 'Trimestral', price: 129.90, durationDays: 90, description: 'Exposição por 90 dias com desconto' },
+        { id: 'p_ann', name: 'Anual', price: 399.90, durationDays: 365, description: 'Melhor custo-benefício anual' }
     ];
   }
 };

@@ -1,16 +1,16 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 
 /**
- * Gera copy para o anúncio (função existente)
+ * Gera copy para o anúncio ou um script de rádio
  */
-export const generateAdCopy = async (profession: string, keywords: string): Promise<string> => {
+export const generateAdCopy = async (profession: string, keywords: string, type: 'short' | 'radio' = 'short'): Promise<string> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Escreva um anúncio curto, persuasivo e profissional para um site de classificados.
-    Profissão: ${profession}.
-    Palavras-chave/Serviços: ${keywords}.
-    O tom deve ser confiável e vibrante. Máximo de 50 palavras. Não use aspas.`;
+    
+    const prompt = type === 'short' 
+      ? `Escreva um anúncio curto (50 palavras), persuasivo e profissional para um site de classificados. Profissão: ${profession}. Palavras-chave: ${keywords}. Tom vibrante.`
+      : `Escreva um SPOT DE RÁDIO de 30 segundos. Inclua indicações de [Trilha] e [Locutor]. Seja extremamente persuasivo. Profissão: ${profession}. Negócio: ${keywords}. Tom de rádio profissional.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -24,22 +24,48 @@ export const generateAdCopy = async (profession: string, keywords: string): Prom
 };
 
 /**
- * Chat interativo com o Assistente Virtual do Portal
+ * Gera áudio (TTS) a partir do texto do anúncio
+ */
+export const generateAudioTTS = async (text: string): Promise<string | undefined> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Limpar o texto de tags de rádio [Trilha] etc para o TTS ficar limpo
+    const cleanText = text.replace(/\[.*?\]/g, '').trim();
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `Leia com voz de locutor de rádio profissional, vibrante e confiável: ${cleanText}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore tem um tom firme e profissional
+          },
+        },
+      },
+    });
+
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  } catch (error) {
+    console.error("Erro ao gerar áudio TTS:", error);
+    return undefined;
+  }
+};
+
+/**
+ * Chat interativo com o Assistente Virtual
  */
 export const chatWithAssistant = async (message: string, history: {role: string, parts: {text: string}[]}[]) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const systemInstruction = `Você é o Assistente Virtual do Portal Hélio Júnior Radialista. 
-    Seu objetivo é ajudar visitantes a entenderem como anunciar no portal.
-    Hélio Júnior é um comunicador respeitado e este portal é uma vitrine para empresas e profissionais.
+    Seu tom é de radialista: vibrante, cordial e muito amigável.
     
     Informações Importantes:
-    1. O portal oferece planos Mensais, Trimestrais e Anuais.
-    2. Anunciantes ganham visibilidade e podem usar IA para criar seus anúncios.
-    3. Se o usuário quiser falar com uma pessoa real ou fechar negócio, diga que ele pode clicar no botão "Falar com Humano" no topo do chat.
-    4. Seja cordial, profissional e use um tom de radialista (vibrante e amigável).
-    5. Mantenha as respostas curtas e objetivas.`;
+    1. Planos: Degustação (30 dias grátis), Mensal (49,90), Trimestral (129,90) e Anual (399,90).
+    2. Diferencial: Locução por IA. O anunciante pode gerar o texto e ouvir como ficaria no rádio.
+    3. Para suporte humano, use o botão no chat.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
