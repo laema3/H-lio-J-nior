@@ -10,7 +10,6 @@ const STORAGE_KEYS = {
   SESSION: 'helio_session_v1'
 };
 
-// Exporting DEFAULT_CONFIG so it can be imported in App.tsx
 export const DEFAULT_CONFIG: SiteConfig = {
   heroLabel: 'Hélio Júnior',
   heroTitle: 'Portal de Classificados',
@@ -25,7 +24,6 @@ const DEFAULT_PLANS: Plan[] = [
   { id: 'p3', name: 'Plano Ouro', price: 129.90, description: 'Topo do portal e IA ilimitada.' }
 ];
 
-// Dados iniciais para o site não ficar vazio
 const SEED_POSTS: Post[] = [
   {
     id: 'seed-1',
@@ -33,35 +31,46 @@ const SEED_POSTS: Post[] = [
     authorName: 'Hélio Júnior',
     category: ProfessionCategory.RADIO,
     title: 'Publicidade em Rádio e Carro de Som',
-    content: 'Leve sua marca para toda a cidade com a voz que o povo confia. Gravação de spots e campanhas políticas.',
+    content: 'Leve sua marca para toda a cidade com a voz que o povo confia. Gravação de spots e campanhas profissionais.',
+    whatsapp: '5500999999999',
+    phone: '00999999999',
     imageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=400',
     createdAt: new Date().toISOString(),
     likes: 12
-  },
-  {
-    id: 'seed-2',
-    authorId: 'u-123',
-    authorName: 'Clínica Sorriso',
-    category: ProfessionCategory.HEALTH,
-    title: 'Check-up Odontológico Completo',
-    content: 'Cuidamos do seu sorriso com tecnologia de ponta. Atendimento especial para assinantes do portal.',
-    imageUrl: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&q=80&w=400',
-    createdAt: new Date().toISOString(),
-    likes: 8
   }
 ];
 
+// Helper para persistência segura
+const saveToLocal = (key: string, data: any) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error(`Erro ao salvar no LocalStorage (${key}):`, e);
+  }
+};
+
+const getFromLocal = (key: string, defaultValue: any) => {
+  const item = localStorage.getItem(key);
+  if (!item) return defaultValue;
+  try {
+    return JSON.parse(item);
+  } catch (e) {
+    console.error(`Erro ao ler do LocalStorage (${key}):`, e);
+    return defaultValue;
+  }
+};
+
 export const storageService = {
   init: async () => {
-    // Inicializa LocalStorage com dados padrão se estiver vazio
-    if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(DEFAULT_CONFIG));
-    if (!localStorage.getItem(STORAGE_KEYS.PLANS)) localStorage.setItem(STORAGE_KEYS.PLANS, JSON.stringify(DEFAULT_PLANS));
-    if (!localStorage.getItem(STORAGE_KEYS.POSTS)) localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(SEED_POSTS));
+    if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
+    if (!localStorage.getItem(STORAGE_KEYS.PLANS)) saveToLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
+    if (!localStorage.getItem(STORAGE_KEYS.POSTS)) saveToLocal(STORAGE_KEYS.POSTS, SEED_POSTS);
     
-    if (!isSupabaseReady()) return;
-    try {
-      await storageService.checkExpirations();
-    } catch (e) {}
+    if (isSupabaseReady()) {
+      try {
+        await storageService.checkExpirations();
+      } catch (e) {}
+    }
   },
 
   checkExpirations: async () => {
@@ -84,13 +93,13 @@ export const storageService = {
   },
 
   getConfig: async (): Promise<SiteConfig> => {
-    const local = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || JSON.stringify(DEFAULT_CONFIG));
+    const local = getFromLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
     if (isSupabaseReady()) {
       try {
         const { data } = await supabase!.from('site_config').select('*').single();
         if (data) {
           const remote = { heroTitle: data.hero_title, heroSubtitle: data.hero_subtitle, heroImageUrl: data.hero_image_url, heroLabel: data.hero_label };
-          localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(remote));
+          saveToLocal(STORAGE_KEYS.CONFIG, remote);
           return remote;
         }
       } catch (e) {}
@@ -99,12 +108,12 @@ export const storageService = {
   },
 
   getPlans: async (): Promise<Plan[]> => {
-    const local = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLANS) || JSON.stringify(DEFAULT_PLANS));
+    const local = getFromLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
     if (isSupabaseReady()) {
       try {
         const { data } = await supabase!.from('plans').select('*').order('price', { ascending: true });
         if (data && data.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.PLANS, JSON.stringify(data));
+          saveToLocal(STORAGE_KEYS.PLANS, data);
           return data;
         }
       } catch (e) {}
@@ -113,13 +122,13 @@ export const storageService = {
   },
 
   getUsers: async (): Promise<User[]> => {
-    const local = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+    const local = getFromLocal(STORAGE_KEYS.USERS, []);
     if (isSupabaseReady()) {
       try {
         const { data } = await supabase!.from('users').select('*').order('created_at', { ascending: false });
         if (data && data.length > 0) {
           const users = data.map((u: any) => ({ ...u, paymentStatus: u.payment_status, paymentConfirmedAt: u.payment_confirmed_at, createdAt: u.created_at, planId: u.plan_id }));
-          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+          saveToLocal(STORAGE_KEYS.USERS, users);
           return users;
         }
       } catch (e) {}
@@ -128,13 +137,13 @@ export const storageService = {
   },
 
   getPosts: async (): Promise<Post[]> => {
-    const local = JSON.parse(localStorage.getItem(STORAGE_KEYS.POSTS) || '[]');
+    const local = getFromLocal(STORAGE_KEYS.POSTS, SEED_POSTS);
     if (isSupabaseReady()) {
       try {
         const { data } = await supabase!.from('posts').select('*').order('created_at', { ascending: false });
         if (data && data.length > 0) {
           const posts = data.map((p: any) => ({ ...p, authorId: p.author_id, authorName: p.author_name, imageUrl: p.image_url, createdAt: p.created_at }));
-          localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(posts));
+          saveToLocal(STORAGE_KEYS.POSTS, posts);
           return posts;
         }
       } catch (e) {}
@@ -147,11 +156,11 @@ export const storageService = {
       return { id: 'admin', name: 'Administrador', email: 'admin@helio.com', role: UserRole.ADMIN, paymentStatus: PaymentStatus.NOT_APPLICABLE, createdAt: new Date().toISOString() };
     }
     const users = await storageService.getUsers();
-    return users.find(u => u.email === email);
+    return users.find(u => u.email.toLowerCase() === email.toLowerCase());
   },
 
   updateConfig: async (config: SiteConfig) => {
-    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(config));
+    saveToLocal(STORAGE_KEYS.CONFIG, config);
     if (isSupabaseReady()) {
       try {
         await supabase!.from('site_config').update({ hero_title: config.heroTitle, hero_subtitle: config.heroSubtitle, hero_image_url: config.heroImageUrl, hero_label: config.heroLabel }).eq('id', 1);
@@ -161,8 +170,9 @@ export const storageService = {
 
   addUser: async (user: any) => {
     const newUser: User = { ...user, id: 'u-' + Date.now(), createdAt: new Date().toISOString() };
-    const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([...users, newUser]));
+    const users = await storageService.getUsers();
+    const updated = [...users, newUser];
+    saveToLocal(STORAGE_KEYS.USERS, updated);
     if (isSupabaseReady()) {
       try {
         await supabase!.from('users').insert([{ id: newUser.id, name: user.name, email: user.email, password: user.password, role: user.role, profession: user.profession, payment_status: user.paymentStatus }]);
@@ -172,43 +182,106 @@ export const storageService = {
   },
 
   updateUser: async (updatedUser: User) => {
-    const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
-    const updatedList = users.map((u: any) => u.id === updatedUser.id ? updatedUser : u);
-    if (!users.find((u: any) => u.id === updatedUser.id)) updatedList.push(updatedUser);
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updatedList));
+    const users = await storageService.getUsers();
+    const updatedList = users.map((u: User) => u.id === updatedUser.id ? updatedUser : u);
+    if (!users.find((u: User) => u.id === updatedUser.id)) updatedList.push(updatedUser);
+    saveToLocal(STORAGE_KEYS.USERS, updatedList);
+    
+    // Atualiza a sessão local se for o usuário logado
+    const session = getFromLocal(STORAGE_KEYS.SESSION, null);
+    if (session && session.id === updatedUser.id) {
+      saveToLocal(STORAGE_KEYS.SESSION, updatedUser);
+    }
+
     if (isSupabaseReady()) {
       try {
-        await supabase!.from('users').update({ name: updatedUser.name, payment_status: updatedUser.paymentStatus, profession: updatedUser.profession, plan_id: updatedUser.planId, payment_confirmed_at: updatedUser.paymentStatus === PaymentStatus.CONFIRMED ? (updatedUser.paymentConfirmedAt || new Date().toISOString()) : null }).eq('id', updatedUser.id);
+        await supabase!.from('users').update({ 
+          name: updatedUser.name, 
+          payment_status: updatedUser.paymentStatus, 
+          profession: updatedUser.profession, 
+          plan_id: updatedUser.planId, 
+          payment_confirmed_at: updatedUser.paymentStatus === PaymentStatus.CONFIRMED ? (updatedUser.paymentConfirmedAt || new Date().toISOString()) : null 
+        }).eq('id', updatedUser.id);
       } catch (e) {}
     }
   },
 
   addPost: async (post: Post) => {
-    const posts = JSON.parse(localStorage.getItem(STORAGE_KEYS.POSTS) || '[]');
+    const posts = await storageService.getPosts();
+    
+    // Verificações de limite apenas para anunciantes comuns
+    if (post.authorId !== 'admin') {
+      const userPosts = posts.filter((p: Post) => p.authorId === post.authorId);
+      const now = new Date();
+      
+      // 1. Limite de 4 anúncios nos últimos 30 dias
+      const last30Days = userPosts.filter((p: Post) => {
+        const pDate = new Date(p.createdAt);
+        const diffDays = (now.getTime() - pDate.getTime()) / (1000 * 3600 * 24);
+        return diffDays <= 30;
+      });
+
+      if (last30Days.length >= 4) {
+        throw new Error("Você atingiu o limite de 4 anúncios por mês.");
+      }
+
+      // 2. Limite de 1 anúncio a cada 7 dias
+      if (userPosts.length > 0) {
+        const latestPost = userPosts.reduce((prev: Post, curr: Post) => 
+          new Date(prev.createdAt) > new Date(curr.createdAt) ? prev : curr
+        );
+        const latestDate = new Date(latestPost.createdAt);
+        const diffDays = (now.getTime() - latestDate.getTime()) / (1000 * 3600 * 24);
+        
+        if (diffDays < 7) {
+          const daysLeft = Math.ceil(7 - diffDays);
+          throw new Error(`Limite de 1 anúncio por semana. Aguarde mais ${daysLeft} dia(s).`);
+        }
+      }
+    }
+
     const newList = [post, ...posts];
-    localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(newList));
+    saveToLocal(STORAGE_KEYS.POSTS, newList);
+    
     if (isSupabaseReady()) {
       try {
-        await supabase!.from('posts').insert([{ id: post.id, author_id: post.authorId, author_name: post.authorName, category: post.category, title: post.title, content: post.content, image_url: post.imageUrl }]);
+        await supabase!.from('posts').insert([{ 
+          id: post.id, 
+          author_id: post.authorId, 
+          author_name: post.authorName, 
+          category: post.category, 
+          title: post.title, 
+          content: post.content, 
+          image_url: post.imageUrl, 
+          whatsapp: post.whatsapp, 
+          phone: post.phone 
+        }]);
       } catch (e) {}
     }
   },
 
   updatePost: async (post: Post) => {
-    const posts = JSON.parse(localStorage.getItem(STORAGE_KEYS.POSTS) || '[]');
+    const posts = await storageService.getPosts();
     const updated = posts.map((p: Post) => p.id === post.id ? post : p);
-    localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(updated));
+    saveToLocal(STORAGE_KEYS.POSTS, updated);
     if (isSupabaseReady()) {
       try {
-        await supabase!.from('posts').update({ category: post.category, title: post.title, content: post.content, image_url: post.imageUrl }).eq('id', post.id);
+        await supabase!.from('posts').update({ 
+          category: post.category, 
+          title: post.title, 
+          content: post.content, 
+          image_url: post.imageUrl, 
+          whatsapp: post.whatsapp, 
+          phone: post.phone 
+        }).eq('id', post.id);
       } catch (e) {}
     }
   },
 
   deletePost: async (postId: string) => {
-    const posts = JSON.parse(localStorage.getItem(STORAGE_KEYS.POSTS) || '[]');
+    const posts = await storageService.getPosts();
     const filtered = posts.filter((p: Post) => p.id !== postId);
-    localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(filtered));
+    saveToLocal(STORAGE_KEYS.POSTS, filtered);
     if (isSupabaseReady()) {
       try {
         await supabase!.from('posts').delete().eq('id', postId);
@@ -217,12 +290,17 @@ export const storageService = {
   },
 
   updatePlans: async (plans: Plan[]) => {
-    localStorage.setItem(STORAGE_KEYS.PLANS, JSON.stringify(plans));
+    saveToLocal(STORAGE_KEYS.PLANS, plans);
     if (isSupabaseReady()) {
       try {
         await supabase!.from('plans').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         if (plans.length > 0) {
-          const payload = plans.map(p => ({ id: p.id.includes('plan-') ? undefined : p.id, name: p.name, price: p.price, description: p.description }));
+          const payload = plans.map(p => ({ 
+            id: p.id.includes('plan-') ? undefined : p.id, 
+            name: p.name, 
+            price: p.price, 
+            description: p.description 
+          }));
           await supabase!.from('plans').insert(payload);
         }
       } catch (e) {}

@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   ADVERTISER = 'ADVERTISER',
@@ -64,6 +65,8 @@ export interface Post {
   category: ProfessionCategory;
   title: string;
   content: string;
+  whatsapp?: string;
+  phone?: string;
   imageUrl?: string;
   createdAt: string;
   likes: number;
