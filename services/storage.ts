@@ -2,7 +2,7 @@
 import { User, Post, UserRole, PaymentStatus, SiteConfig, Plan } from '../types';
 import { db, isSupabaseReady } from './supabase';
 
-const KEY_PREFIX = 'helio_v3_';
+const KEY_PREFIX = 'helio_v4_';
 
 export const STORAGE_KEYS = {
   CONFIG: `${KEY_PREFIX}config`,
@@ -13,44 +13,68 @@ export const STORAGE_KEYS = {
   CATEGORIES: `${KEY_PREFIX}categories`
 };
 
+const DEFAULT_PLANS: Plan[] = [
+  { id: 'p_free', name: 'Degustação', price: 0, durationDays: 30, description: '30 dias grátis para novos usuários' },
+  { id: 'p_mon', name: 'Mensal', price: 49.90, durationDays: 30, description: 'Exposição mensal no portal' }
+];
+
 export const DEFAULT_CONFIG: SiteConfig = {
   heroLabel: 'Hélio Júnior',
   heroTitle: 'Portal de Classificados',
-  heroSubtitle: 'Destaque sua marca com a credibilidade de quem entende de comunicação.',
-  heroImageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=1200&h=675',
+  heroSubtitle: 'Destaque sua marca com a credibilidade de quem entende de rádio.',
+  heroImageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?q=80&w=1200',
   address: 'Sua Cidade - Estado',
   phone: '(00) 0000-0000',
   whatsapp: '(00) 90000-0000',
-  instagramUrl: 'https://instagram.com',
-  facebookUrl: 'https://facebook.com',
-  youtubeUrl: 'https://youtube.com',
   pixKey: '',
   pixName: ''
 };
 
-export const INITIAL_CATEGORIES = [
-  'Construção e Reformas', 'Educação', 'Festas e Eventos', 'Jurídico', 'Outros', 
-  'Radialista/Mídia', 'Saúde e Bem-estar', 'Tecnologia e Design'
-];
+export const INITIAL_CATEGORIES = ['Comércio', 'Serviços', 'Saúde', 'Educação', 'Eventos', 'Outros'];
 
-export const saveToLocal = (key: string, data: any) => {
-  localStorage.setItem(key, JSON.stringify(data));
-};
-
+export const saveToLocal = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
 export const getFromLocal = (key: string, defaultValue: any) => {
   const item = localStorage.getItem(key);
-  if (item === null) return defaultValue;
-  try {
-    return JSON.parse(item);
-  } catch {
-    return defaultValue;
-  }
+  if (!item) return defaultValue;
+  try { return JSON.parse(item); } catch { return defaultValue; }
 };
 
 export const storageService = {
   init: async () => {
-    if (localStorage.getItem(STORAGE_KEYS.CONFIG) === null) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
-    if (localStorage.getItem(STORAGE_KEYS.CATEGORIES) === null) saveToLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+    if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) saveToLocal(STORAGE_KEYS.CONFIG, DEFAULT_CONFIG);
+    if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) saveToLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+  },
+
+  async getPlans(): Promise<Plan[]> {
+    const local = getFromLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
+    if (isSupabaseReady()) {
+      try {
+        const remote = await db.getPlans();
+        if (remote && remote.length > 0) {
+          saveToLocal(STORAGE_KEYS.PLANS, remote);
+          return remote as Plan[];
+        } else if (local.length > 0) {
+          // Se o banco estiver vazio mas houver local, sobe para o banco
+          for (const p of local) await db.savePlan(p);
+        }
+      } catch {}
+    }
+    return local;
+  },
+
+  async savePlan(plan: Plan) {
+    if (isSupabaseReady()) await db.savePlan(plan);
+    const plans = await this.getPlans();
+    const updated = plans.some(p => p.id === plan.id) 
+      ? plans.map(p => p.id === plan.id ? plan : p)
+      : [...plans, plan];
+    saveToLocal(STORAGE_KEYS.PLANS, updated);
+  },
+
+  async deletePlan(id: string) {
+    if (isSupabaseReady()) await db.deletePlan(id);
+    const plans = await this.getPlans();
+    saveToLocal(STORAGE_KEYS.PLANS, plans.filter(p => p.id !== id));
   },
 
   async getConfig(): Promise<SiteConfig> {
@@ -58,139 +82,61 @@ export const storageService = {
     if (isSupabaseReady()) {
       try {
         const remote = await db.getConfig();
-        if (remote) {
-          saveToLocal(STORAGE_KEYS.CONFIG, remote);
-          return remote as SiteConfig;
-        }
-      } catch (e) {
-        console.error("Erro ao buscar config remota:", e);
-      }
+        if (remote) return remote as SiteConfig;
+      } catch {}
     }
     return local;
   },
-  
+
   async updateConfig(config: SiteConfig) {
     saveToLocal(STORAGE_KEYS.CONFIG, config);
-    if (isSupabaseReady()) {
-        try { await db.updateConfig(config); } catch (e) { console.error("Erro updateConfig:", e); }
-    }
-  },
-
-  async getCategories(): Promise<string[]> {
-    const local = getFromLocal(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
-    if (isSupabaseReady()) {
-      try {
-        const remote = await db.getCategories();
-        if (remote && remote.length > 0) {
-          saveToLocal(STORAGE_KEYS.CATEGORIES, remote);
-          return remote;
-        }
-      } catch (e) { console.error("Erro getCategories:", e); }
-    }
-    return local;
-  },
-
-  async saveCategories(categories: string[]) {
-    saveToLocal(STORAGE_KEYS.CATEGORIES, categories);
-    if (isSupabaseReady()) {
-        try { await db.saveCategories(categories); } catch (e) { console.error("Erro saveCategories:", e); }
-    }
+    if (isSupabaseReady()) await db.updateConfig(config);
   },
 
   async getUsers(): Promise<User[]> {
-    const local = getFromLocal(STORAGE_KEYS.USERS, []);
-    if (isSupabaseReady()) {
-      try {
-        const remote = await db.getUsers();
-        if (remote && remote.length > 0) {
-          saveToLocal(STORAGE_KEYS.USERS, remote);
-          return remote as any[];
-        }
-      } catch (e) {
-        console.error("Erro getUsers:", e);
-      }
-    }
-    return local;
+    if (isSupabaseReady()) return await db.getUsers() as any;
+    return getFromLocal(STORAGE_KEYS.USERS, []);
   },
-  
+
   async getPosts(): Promise<Post[]> {
-    const local = getFromLocal(STORAGE_KEYS.POSTS, []);
-    if (isSupabaseReady()) {
-      try {
-        const remote = await db.getPosts();
-        if (remote && remote.length > 0) {
-          saveToLocal(STORAGE_KEYS.POSTS, remote);
-          return remote as any[];
-        }
-      } catch (e) { console.error("Erro getPosts:", e); }
-    }
-    return local;
+    if (isSupabaseReady()) return await db.getPosts() as any;
+    return getFromLocal(STORAGE_KEYS.POSTS, []);
   },
 
   async findUserByEmail(email: string): Promise<User | undefined> {
     if (email.toLowerCase() === 'admin@helio.com') {
-      return { id: 'admin', name: 'Administrador', email: 'admin@helio.com', role: UserRole.ADMIN, paymentStatus: PaymentStatus.NOT_APPLICABLE, createdAt: new Date().toISOString() };
+      return { id: 'admin', name: 'Hélio Júnior', email: 'admin@helio.com', role: UserRole.ADMIN, paymentStatus: PaymentStatus.NOT_APPLICABLE, createdAt: new Date().toISOString() };
     }
-    if (isSupabaseReady()) {
-      try {
-        const remote = await db.findUserByEmail(email);
-        if (remote) return remote as any;
-      } catch (e) { console.error("Erro findUserByEmail:", e); }
-    }
+    if (isSupabaseReady()) return await db.findUserByEmail(email) as any;
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
-    return users.find((u: User) => u.email.toLowerCase() === email.toLowerCase());
+    return users.find((u: User) => u.email === email.toLowerCase());
   },
 
   async addUser(userData: any) {
     const newUser: User = { ...userData, id: 'u-' + Date.now(), createdAt: new Date().toISOString() };
+    if (isSupabaseReady()) await db.updateUser(newUser);
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     saveToLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-    if (isSupabaseReady()) {
-        try { await db.updateUser(newUser); } catch (e) { console.error("Erro addUser:", e); }
-    }
     return newUser;
   },
 
-  async updateUser(updatedUser: User) {
+  async updateUser(user: User) {
+    if (isSupabaseReady()) await db.updateUser(user);
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
-    saveToLocal(STORAGE_KEYS.USERS, users.map((u: User) => u.id === updatedUser.id ? updatedUser : u));
-    if (isSupabaseReady()) {
-        try { await db.updateUser(updatedUser); } catch (e) { console.error("Erro updateUser:", e); }
-    }
+    saveToLocal(STORAGE_KEYS.USERS, users.map((u: User) => u.id === user.id ? user : u));
     const session = getFromLocal(STORAGE_KEYS.SESSION, null);
-    if (session && session.id === updatedUser.id) saveToLocal(STORAGE_KEYS.SESSION, updatedUser);
+    if (session?.id === user.id) saveToLocal(STORAGE_KEYS.SESSION, user);
   },
 
   async addPost(post: Post) {
+    if (isSupabaseReady()) await db.addPost(post);
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, [post, ...posts]);
-    if (isSupabaseReady()) {
-        try { await db.addPost(post); } catch (e) { console.error("Erro addPost:", e); }
-    }
-  },
-
-  async updatePost(updatedPost: Post) {
-    const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
-    saveToLocal(STORAGE_KEYS.POSTS, posts.map((p: Post) => p.id === updatedPost.id ? updatedPost : p));
-    if (isSupabaseReady()) {
-        try { await db.updatePost(updatedPost); } catch (e) { console.error("Erro updatePost:", e); }
-    }
   },
 
   async deletePost(id: string) {
+    if (isSupabaseReady()) await db.deletePost(id);
     const posts = getFromLocal(STORAGE_KEYS.POSTS, []);
     saveToLocal(STORAGE_KEYS.POSTS, posts.filter((p: Post) => p.id !== id));
-    if (isSupabaseReady()) {
-        try { await db.deletePost(id); } catch (e) { console.error("Erro deletePost:", e); }
-    }
-  },
-
-  getPlans(): Plan[] {
-    return [
-        { id: 'p_free', name: 'Degustação Grátis', price: 0, durationDays: 30, description: 'Experimente o portal por 30 dias sem custos' },
-        { id: 'p_mon', name: 'Mensal', price: 49.90, durationDays: 30, description: 'Exposição por 30 dias no portal' },
-        { id: 'p_tri', name: 'Trimestral', price: 129.90, durationDays: 90, description: 'Exposição por 90 dias com desconto' },
-        { id: 'p_ann', name: 'Anual', price: 399.90, durationDays: 365, description: 'Melhor custo-benefício anual' }
-    ];
   }
 };

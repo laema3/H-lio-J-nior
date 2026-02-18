@@ -1,171 +1,169 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// =========================================================
+// CONFIGURAÇÕES DO BANCO DE DADOS (SUPABASE)
+// Substitua os valores abaixo pelas suas credenciais reais
+// =========================================================
+const SUPABASE_URL = 'https://yzufoswsajzbovmcwscl.supabase.co'; 
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6dWZvc3dzYWp6Ym92bWN3c2NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzI4MTMsImV4cCI6MjA4NjkwODgxM30.R8pCkQQbe4ezyFyDmQBHanPhjsKJF-qX3KLsyxHHNsM';
+// =========================================================
+
 const getCredentials = () => {
   if (typeof window === 'undefined') return { url: '', key: '' };
-  const url = localStorage.getItem('supabase_url_manual');
-  const key = localStorage.getItem('supabase_key_manual');
-  return {
-    url: (url || "").trim(),
-    key: (key || "").trim()
-  };
+  
+  // Prioriza as chaves fixas no código
+  const url = SUPABASE_URL.includes('supabase.co') ? SUPABASE_URL : (localStorage.getItem('supabase_url_manual') || "");
+  const key = SUPABASE_ANON_KEY.length > 20 ? SUPABASE_ANON_KEY : (localStorage.getItem('supabase_key_manual') || "");
+  
+  return { url: url.trim(), key: key.trim() };
 };
 
 const isValidUrl = (u: string) => u && u.startsWith('https://') && u.includes('.supabase.co');
 const isValidKey = (k: string) => k && k.length > 20;
 
-// Cliente mutável para permitir reinicialização
-export let supabase: any = null;
+let supabaseInstance: any = null;
 
-export const isSupabaseReady = () => {
-  if (supabase) return true;
-  
-  // Tenta recuperar se estiver nulo (Lazy Init)
+export const getSupabase = () => {
+  if (supabaseInstance) return supabaseInstance;
   const { url, key } = getCredentials();
   if (isValidUrl(url) && isValidKey(key)) {
     try {
-      supabase = createClient(url, key, {
-        auth: { persistSession: true }
+      supabaseInstance = createClient(url, key, {
+        auth: { persistSession: true, autoRefreshToken: true }
       });
-      return true;
+      return supabaseInstance;
     } catch (e) {
-      return false;
+      return null;
     }
   }
-  return false;
+  return null;
 };
 
-// Inicialização imediata no carregamento do script
-isSupabaseReady();
+export const isSupabaseReady = () => {
+  const { url, key } = getCredentials();
+  return isValidUrl(url) && isValidKey(key);
+};
 
 export const reinitializeSupabase = (newUrl: string, newKey: string) => {
   if (!isValidUrl(newUrl) || !isValidKey(newKey)) return false;
-  
   localStorage.setItem('supabase_url_manual', newUrl.trim());
   localStorage.setItem('supabase_key_manual', newKey.trim());
-  
-  supabase = createClient(newUrl.trim(), newKey.trim(), {
-    auth: { persistSession: true }
-  });
-  
+  supabaseInstance = createClient(newUrl.trim(), newKey.trim(), { auth: { persistSession: true } });
   return true;
-};
-
-export const clearSupabaseCredentials = () => {
-  localStorage.removeItem('supabase_url_manual');
-  localStorage.removeItem('supabase_key_manual');
-  supabase = null;
-  window.location.reload();
 };
 
 export const db = {
   async testConnection() {
     const logs: string[] = [];
     const { url, key } = getCredentials();
+    logs.push(`[${new Date().toLocaleTimeString()}] 🛠️ Iniciando Diagnóstico...`);
     
-    logs.push(`[${new Date().toLocaleTimeString()}] 🛰️ Iniciando teste de handshake...`);
+    if (!isValidUrl(url)) logs.push("❌ URL Inválida ou não configurada no código.");
+    if (!isValidKey(key)) logs.push("❌ Anon Key Inválida ou não configurada no código.");
     
-    if (!isValidUrl(url) || !isValidKey(key)) {
-      logs.push("❌ ERRO: URL ou Key inválidas no armazenamento local.");
-      return { success: false, logs };
-    }
+    if (!isValidUrl(url) || !isValidKey(key)) return { success: false, logs };
 
     try {
-      const tempClient = createClient(url, key);
-      const { error } = await tempClient.from('profiles').select('id').limit(1);
+      const client = createClient(url, key);
+      const { error } = await client.from('profiles').select('id').limit(1);
+      if (error && error.code !== '42P01') throw error;
       
-      if (error && error.code !== '42P01') {
-        logs.push(`❌ FALHA: ${error.message}`);
-        return { success: false, logs };
-      }
-
-      logs.push("✅ SUCESSO: O banco de dados respondeu corretamente.");
-      if (error?.code === '42P01') logs.push("⚠️ NOTA: A tabela 'profiles' ainda não existe, mas a conexão está OK.");
+      logs.push("✅ CONEXÃO ESTABELECIDA COM SUCESSO!");
+      logs.push(`📡 Conectado em: ${url}`);
+      if (error?.code === '42P01') logs.push("⚠️ Nota: Tabela 'profiles' não encontrada (rode o SQL no painel Supabase).");
       
       return { success: true, logs };
     } catch (e: any) {
-      logs.push(`💥 ERRO CRÍTICO: ${e.message}`);
-      return { success: false, logs };
+      return { success: false, logs: [...logs, `💥 Erro de Rede: ${e.message}`] };
     }
   },
 
+  // Planos
+  async getPlans() {
+    const client = getSupabase();
+    if (!client) return [];
+    const { data } = await client.from('plans').select('*').order('price', { ascending: true });
+    return data || [];
+  },
+  async savePlan(plan: any) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('plans').upsert(plan);
+  },
+  async deletePlan(id: string) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('plans').delete().eq('id', id);
+  },
+
+  // Config e Outros
   async getConfig() {
-    if (!isSupabaseReady()) return null;
-    try {
-      const { data } = await supabase.from('site_config').select('*').eq('id', 1).maybeSingle();
-      return data;
-    } catch { return null; }
+    const client = getSupabase();
+    if (!client) return null;
+    const { data } = await client.from('site_config').select('*').eq('id', 1).maybeSingle();
+    return data;
   },
-
   async updateConfig(config: any) {
-    if (!isSupabaseReady()) return;
+    const client = getSupabase();
+    if (!client) return;
     const { id, updated_at, ...clean } = config;
-    await supabase.from('site_config').upsert({ id: 1, ...clean });
+    await client.from('site_config').upsert({ id: 1, ...clean });
   },
-
   async getUsers() {
-    if (!isSupabaseReady()) return [];
-    try {
-      const { data } = await supabase.from('profiles').select('*').order('createdAt', { ascending: false });
-      return data || [];
-    } catch { return []; }
+    const client = getSupabase();
+    if (!client) return [];
+    const { data } = await client.from('profiles').select('*').order('createdAt', { ascending: false });
+    return data || [];
   },
-
   async updateUser(user: any) {
-    if (!isSupabaseReady()) return;
-    await supabase.from('profiles').upsert(user);
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('profiles').upsert(user);
   },
-
   async deleteUser(id: string) {
-    if (!isSupabaseReady()) return;
-    await supabase.from('profiles').delete().eq('id', id);
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('profiles').delete().eq('id', id);
   },
-
   async findUserByEmail(email: string) {
-    if (!isSupabaseReady()) return null;
-    try {
-      const { data } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).maybeSingle();
-      return data;
-    } catch { return null; }
+    const client = getSupabase();
+    if (!client) return null;
+    const { data } = await client.from('profiles').select('*').eq('email', email.toLowerCase()).maybeSingle();
+    return data;
   },
-
   async getPosts() {
-    if (!isSupabaseReady()) return [];
-    try {
-      const { data } = await supabase.from('posts').select('*').order('createdAt', { ascending: false });
-      return data || [];
-    } catch { return []; }
+    const client = getSupabase();
+    if (!client) return [];
+    const { data } = await client.from('posts').select('*').order('createdAt', { ascending: false });
+    return data || [];
   },
-
   async addPost(post: any) {
-    if (!isSupabaseReady()) return;
-    await supabase.from('posts').insert(post);
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('posts').insert(post);
   },
-
   async updatePost(post: any) {
-    if (!isSupabaseReady()) return;
+    const client = getSupabase();
+    if (!client) return;
     const { id, ...data } = post;
-    await supabase.from('posts').update(data).eq('id', id);
+    await client.from('posts').update(data).eq('id', id);
   },
-
   async deletePost(id: string) {
-    if (!isSupabaseReady()) return;
-    await supabase.from('posts').delete().eq('id', id);
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('posts').delete().eq('id', id);
   },
-
   async getCategories() {
-    if (!isSupabaseReady()) return null;
-    try {
-      const { data } = await supabase.from('categories').select('name');
-      return data ? data.map(c => c.name) : null;
-    } catch { return null; }
+    const client = getSupabase();
+    if (!client) return null;
+    const { data } = await client.from('categories').select('name');
+    return data ? data.map(c => c.name) : null;
   },
-
   async saveCategories(categories: string[]) {
-    if (!isSupabaseReady()) return;
-    try {
-      await supabase.from('categories').delete().neq('name', '___');
-      await supabase.from('categories').insert(categories.map(name => ({ name })));
-    } catch {}
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('categories').delete().neq('name', '___');
+    await client.from('categories').insert(categories.map(name => ({ name })));
   }
 };
