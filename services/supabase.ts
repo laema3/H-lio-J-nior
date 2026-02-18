@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://yzufoswsajzbovmcwscl.supabase.co'; 
@@ -14,95 +15,169 @@ export const getSupabase = () => {
   return null;
 };
 
+// Converte objetos CamelCase para o padrão de colunas do banco (lowercase)
+const toDb = (obj: any) => {
+  const dbObj: any = {};
+  for (const key in obj) {
+    if (key === 'password' && !obj[key]) continue;
+    dbObj[key.toLowerCase()] = obj[key];
+  }
+  return dbObj;
+};
+
 export const db = {
   async getConfig() {
     const client = getSupabase();
     if (!client) return null;
-    const { data } = await client.from('site_config').select('*').eq('id', 1).maybeSingle();
-    return data;
+    try {
+      const { data, error } = await client.from('site_config').select('*').eq('id', 1).maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        id: data.id,
+        heroTitle: data.herotitle || '',
+        heroSubtitle: data.herosubtitle || '',
+        heroImageUrl: data.heroimageurl || '',
+        heroLabel: data.herolabel || 'Portal VIP',
+        whatsapp: data.whatsapp || '',
+        pixKey: data.pixkey || '',
+        pixName: data.pixname || '',
+        headerLogoUrl: data.headerlogourl || ''
+      };
+    } catch (err) { return null; }
   },
+
   async updateConfig(config: any) {
     const client = getSupabase();
     if (!client) return;
-    const { id, updated_at, ...clean } = config;
-    await client.from('site_config').upsert({ id: 1, ...clean });
+    const payload = toDb(config);
+    delete payload.id;
+    await client.from('site_config').upsert({ id: 1, ...payload });
   },
+
   async getUsers() {
     const client = getSupabase();
     if (!client) return [];
-    const { data } = await client.from('profiles').select('*').order('createdAt', { ascending: false });
-    return data || [];
+    const { data } = await client.from('profiles').select('*').order('id', { ascending: false });
+    return (data || []).map((u: any) => ({
+      ...u,
+      id: String(u.id),
+      planId: u.planid || 'p_free',
+      paymentStatus: u.paymentstatus || 'AGUARDANDO PAGAMENTO',
+      createdAt: u.createdat,
+      expiresAt: u.expiresat
+    }));
   },
+
   async authenticate(email: string, pass: string) {
     const client = getSupabase();
     if (!client) return null;
-    const { data } = await client.from('profiles')
-      .select('*')
-      .eq('email', email.toLowerCase())
-      .eq('password', pass)
-      .maybeSingle();
-    return data;
+    const { data } = await client.from('profiles').select('*').eq('email', email.toLowerCase()).eq('password', pass).maybeSingle();
+    if (!data) return null;
+    return {
+      ...data,
+      id: String(data.id),
+      planId: data.planid || 'p_free',
+      paymentStatus: data.paymentstatus || 'AGUARDANDO PAGAMENTO',
+      createdAt: data.createdat,
+      expiresAt: data.expiresat
+    };
   },
+
   async addUser(user: any) {
     const client = getSupabase();
     if (!client) return null;
-    const { data, error } = await client.from('profiles').insert(user).select().single();
+    const payload = toDb(user);
+    const { data, error } = await client.from('profiles').insert(payload).select().single();
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      id: String(data.id),
+      planId: data.planid || 'p_free',
+      paymentStatus: data.paymentstatus || 'AGUARDANDO PAGAMENTO',
+      createdAt: data.createdat,
+      expiresAt: data.expiresat
+    };
   },
+
   async updateUser(user: any) {
     const client = getSupabase();
     if (!client) return;
-    await client.from('profiles').upsert(user);
+    const { id, ...clean } = user;
+    const payload = toDb(clean);
+    await client.from('profiles').update(payload).eq('id', id);
   },
+
   async deleteUser(id: string) {
     const client = getSupabase();
     if (!client) return;
     await client.from('profiles').delete().eq('id', id);
   },
+
   async getPlans() {
     const client = getSupabase();
     if (!client) return [];
     const { data } = await client.from('plans').select('*').order('price', { ascending: true });
-    return data || [];
+    return (data || []).map((p: any) => ({
+      ...p,
+      durationDays: p.durationdays || 30
+    }));
   },
+
   async savePlan(plan: any) {
     const client = getSupabase();
     if (!client) return;
-    await client.from('plans').upsert(plan);
+    const payload = toDb(plan);
+    await client.from('plans').upsert(payload);
   },
+
   async deletePlan(id: string) {
     const client = getSupabase();
     if (!client) return;
     await client.from('plans').delete().eq('id', id);
   },
+
   async getPosts() {
     const client = getSupabase();
     if (!client) return [];
-    const { data } = await client.from('posts').select('*').order('createdAt', { ascending: false });
-    return data || [];
+    const { data } = await client.from('posts').select('*').order('id', { ascending: false });
+    return (data || []).map((p: any) => ({
+      ...p,
+      authorId: String(p.authorid || 'unknown'),
+      authorName: p.authorname || 'Anunciante VIP',
+      imageUrl: p.imageurl || '',
+      logoUrl: p.logourl || '',
+      createdAt: p.createdat || new Date().toISOString()
+    }));
   },
+
   async savePost(post: any) {
     const client = getSupabase();
     if (!client) return;
-    await client.from('posts').upsert(post);
+    const payload = toDb(post);
+    await client.from('posts').upsert(payload);
   },
+
   async deletePost(id: string) {
     const client = getSupabase();
     if (!client) return;
     await client.from('posts').delete().eq('id', id);
   },
+
   async getCategories() {
     const client = getSupabase();
     if (!client) return [];
     const { data } = await client.from('categories').select('*').order('name', { ascending: true });
     return data || [];
   },
+
   async saveCategory(cat: any) {
     const client = getSupabase();
     if (!client) return;
-    await client.from('categories').upsert(cat);
+    const payload = toDb(cat);
+    await client.from('categories').upsert(payload);
   },
+
   async deleteCategory(id: string) {
     const client = getSupabase();
     if (!client) return;
