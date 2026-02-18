@@ -30,6 +30,7 @@ export interface SiteConfig {
   heroImageUrl: string;
   heroLabel: string;
   headerLogoUrl?: string;
+  footerLogoUrl?: string;
   pixKey?: string;
   pixName?: string;
   whatsapp?: string;
