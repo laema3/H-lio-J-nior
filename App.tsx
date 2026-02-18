@@ -109,19 +109,9 @@ const App: React.FC = () => {
     const [showDiag, setShowDiag] = useState(false);
     
     const [magicPrompt, setMagicPrompt] = useState('');
-    const [editingPost, setEditingPost] = useState<Post | null>(null);
 
-    // Persistência Reativa das Chaves
-    const [supUrl, setSupUrl] = useState(() => localStorage.getItem('supabase_url_manual') || '');
-    const [supKey, setSupKey] = useState(() => localStorage.getItem('supabase_key_manual') || '');
-
-    useEffect(() => {
-        localStorage.setItem('supabase_url_manual', supUrl.trim());
-        localStorage.setItem('supabase_key_manual', supKey.trim());
-    }, [supUrl, supKey]);
-
-    const adContentRef = useRef<HTMLTextAreaElement>(null);
-    const adTitleRef = useRef<HTMLInputElement>(null);
+    const [supUrlInput, setSupUrlInput] = useState(() => localStorage.getItem('supabase_url_manual') || '');
+    const [supKeyInput, setSupKeyInput] = useState(() => localStorage.getItem('supabase_key_manual') || '');
 
     const showToast = (m: string, t: 'success' | 'error' = 'success') => {
         setToast({ m, t });
@@ -133,12 +123,14 @@ const App: React.FC = () => {
         try {
             const ready = isSupabaseReady();
             setIsOnline(ready);
+            
             const [p, u, c, cfg] = await Promise.all([
                 storageService.getPosts(),
                 storageService.getUsers(),
                 storageService.getCategories(),
                 storageService.getConfig()
             ]);
+
             setPosts(p || []);
             setAllUsers(u || []);
             setCategories(c || []);
@@ -149,18 +141,19 @@ const App: React.FC = () => {
                 const fresh = (u || []).find((usr: User) => usr.id === session.id);
                 if (fresh) {
                     setCurrentUser(fresh);
-                    // Regra de Redirecionamento por Expiração
+                    saveToLocal(STORAGE_KEYS.SESSION, fresh); // Sincroniza localmente
+                    
                     if (fresh.role === UserRole.ADVERTISER && fresh.expiresAt) {
                         const expired = new Date(fresh.expiresAt) < new Date();
-                        if (expired) {
+                        if (expired && (currentView === 'DASHBOARD' || currentView === 'HOME')) {
                            setCurrentView('PAYMENT');
-                           showToast("Seu plano expirou. Por favor, escolha uma renovação paga.", "error");
+                           showToast("Plano expirado! Escolha uma renovação para continuar anunciando.", "error");
                         }
                     }
                 }
             }
         } catch (e) {
-            console.error("Erro crítico ao atualizar dados:", e);
+            console.error("Erro no refresh do App:", e);
         } finally {
             setIsLoading(false);
         }
@@ -170,21 +163,29 @@ const App: React.FC = () => {
         storageService.init().then(refresh);
     }, []);
 
+    const handleSaveDatabase = () => {
+        if (!supUrlInput.includes('supabase.co') || supKeyInput.length < 20) {
+            showToast("Dados do Supabase inválidos.", "error");
+            return;
+        }
+        reinitializeSupabase(supUrlInput, supKeyInput);
+        showToast("Configurações salvas permanentemente!");
+        setTimeout(() => window.location.reload(), 1000);
+    };
+
     const handleTestConnection = async () => {
         setIsTestingConn(true);
-        setDiagLogs(["⏳ Analisando rede e conexão..."]);
         try {
             const result = await db.testConnection();
             setDiagLogs(result.logs);
             if (result.success) {
-                showToast("Conexão Verificada!");
+                showToast("Conexão estabelecida com sucesso!");
                 setIsOnline(true);
             } else {
-                showToast("Falha técnica detectada.", "error");
-                setIsOnline(false);
+                showToast("Falha ao conectar no banco cloud.", "error");
             }
         } catch (e) {
-            setDiagLogs(prev => [...prev, "❌ Erro inesperado durante o diagnóstico."]);
+            setDiagLogs(prev => [...prev, "❌ Erro inesperado no teste."]);
         } finally {
             setIsTestingConn(false);
         }
@@ -202,12 +203,12 @@ const App: React.FC = () => {
                 saveToLocal(STORAGE_KEYS.SESSION, user);
                 setCurrentView(user.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD');
                 await refresh();
-                showToast(`Bem-vindo, ${user.name}!`);
+                showToast(`Olá, ${user.name.split(' ')[0]}!`);
             } else {
-                showToast("Email não encontrado no sistema.", "error");
+                showToast("Usuário não encontrado.", "error");
             }
         } catch (e) {
-            showToast("Erro ao tentar fazer login. Verifique sua rede.", "error");
+            showToast("Erro ao autenticar. Tente novamente.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -224,9 +225,7 @@ const App: React.FC = () => {
             if (typeof result === 'object' && result !== null) {
                 title = (result as any).title || title;
                 content = (result as any).content || "";
-            } else {
-                content = result as string;
-            }
+            } else { content = result as string; }
 
             const imageUrl = await generateAdImage(`${title}: ${content}`);
 
@@ -246,10 +245,9 @@ const App: React.FC = () => {
             await storageService.addPost(newPost);
             await refresh();
             setMagicPrompt('');
-            showToast("Anúncio gerado com sucesso!");
+            showToast("IA criou seu anúncio com sucesso!");
         } catch (error) {
-            console.error("Erro no gerador mágico:", error);
-            showToast("Falha ao gerar conteúdo.", "error");
+            showToast("Erro ao gerar conteúdo com IA.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -267,12 +265,11 @@ const App: React.FC = () => {
                         <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-80px)] bg-brand-dark pt-20 animate-in fade-in">
                             <aside className="w-full md:w-72 bg-brand-dark/50 border-r border-white/5 p-6 space-y-2">
                                 <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8 px-4 flex items-center gap-2">
-                                    <ShieldAlert size={20} className="text-brand-accent"/> Administração
+                                    <ShieldAlert size={20} className="text-brand-accent"/> Admin Portal
                                 </h2>
                                 {[
-                                    { id: 'INICIO', label: 'Resumo', icon: LayoutDashboard },
+                                    { id: 'INICIO', label: 'Painel Geral', icon: LayoutDashboard },
                                     { id: 'CLIENTES', label: 'Assinantes', icon: Users },
-                                    { id: 'ANUNCIOS', label: 'Todos Anúncios', icon: ImageIcon },
                                     { id: 'AJUSTES', label: 'Banco de Dados', icon: Database },
                                 ].map(item => (
                                     <button 
@@ -289,26 +286,26 @@ const App: React.FC = () => {
                             <main className="flex-1 p-8 overflow-y-auto">
                                 {adminSubView === 'AJUSTES' && (
                                     <div className="max-w-4xl space-y-8 animate-in slide-in-from-right pb-20">
-                                        <h3 className="text-3xl font-black text-white uppercase tracking-tighter">Conexão com Banco de Dados</h3>
                                         <div className="glass-panel p-8 rounded-[40px] space-y-6 border-white/5">
+                                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Credenciais Cloud</h3>
                                             <div className="space-y-4">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">URL Supabase (Salva ao digitar)</label>
-                                                <input value={supUrl} onChange={e => setSupUrl(e.target.value)} className="w-full bg-black/60 border border-white/10 p-5 rounded-2xl text-sm text-white focus:border-brand-primary outline-none" placeholder="Ex: https://xxx.supabase.co" />
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Supabase URL</label>
+                                                <input value={supUrlInput} onChange={e => setSupUrlInput(e.target.value)} className="w-full bg-black/60 border border-white/10 p-5 rounded-2xl text-sm text-white focus:border-brand-primary outline-none font-mono" />
                                             </div>
                                             <div className="space-y-4">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Anon Key (Salva ao digitar)</label>
-                                                <input value={supKey} onChange={e => setSupKey(e.target.value)} className="w-full bg-black/60 border border-white/10 p-5 rounded-2xl text-sm text-white focus:border-brand-primary outline-none" placeholder="Sua chave secreta do projeto..." />
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Supabase Anon Key</label>
+                                                <input value={supKeyInput} onChange={e => setSupKeyInput(e.target.value)} className="w-full bg-black/60 border border-white/10 p-5 rounded-2xl text-sm text-white focus:border-brand-primary outline-none font-mono" />
                                             </div>
-                                            <div className="flex flex-col sm:flex-row gap-4">
-                                                <Button onClick={handleTestConnection} isLoading={isTestingConn} className="flex-1 h-16 uppercase text-xs font-black"><Activity size={18}/> Testar Conexão</Button>
-                                                <Button variant="outline" onClick={() => { reinitializeSupabase(supUrl, supKey); window.location.reload(); }} className="flex-1 h-16 uppercase text-xs font-black"><RefreshCcw size={18}/> Aplicar Alterações</Button>
+                                            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                                                <Button onClick={handleTestConnection} isLoading={isTestingConn} className="flex-1 h-16 text-xs font-black uppercase tracking-widest"><Activity size={18}/> Testar</Button>
+                                                <Button variant="secondary" onClick={handleSaveDatabase} className="flex-1 h-16 text-xs font-black uppercase tracking-widest"><RefreshCcw size={18}/> Salvar e Conectar</Button>
                                             </div>
                                         </div>
-                                        <div className="glass-panel p-8 rounded-[40px] border-white/5">
-                                            <div className="flex items-center gap-2 text-brand-accent mb-4"><Terminal size={18}/><h4 className="text-[11px] font-black uppercase tracking-widest">Relatório Técnico</h4></div>
+                                        <div className="bg-black/40 rounded-[40px] p-8 border border-white/5">
+                                            <div className="flex items-center gap-2 text-brand-accent mb-4"><Terminal size={18}/><h4 className="text-[11px] font-black uppercase tracking-widest">Logs de Conexão</h4></div>
                                             <div className="bg-black/90 rounded-2xl p-6 font-mono text-[10px] space-y-2 max-h-[300px] overflow-y-auto border border-white/5 text-gray-400">
                                                 {diagLogs.map((log, i) => <div key={i} className={log.includes('❌') ? 'text-red-400' : log.includes('✅') ? 'text-green-400' : ''}>{log}</div>)}
-                                                {diagLogs.length === 0 && <span className="italic">Clique em "Testar Conexão" para ver os logs.</span>}
+                                                {diagLogs.length === 0 && <span className="italic">Nenhum teste executado.</span>}
                                             </div>
                                         </div>
                                     </div>
@@ -316,23 +313,22 @@ const App: React.FC = () => {
 
                                 {adminSubView === 'CLIENTES' && (
                                     <div className="space-y-6 animate-in slide-in-from-right">
-                                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Gerenciamento de Assinantes</h3>
                                         <div className="grid grid-cols-1 gap-4">
                                             {allUsers.length > 0 ? allUsers.map(u => (
-                                                <div key={u.id} className="glass-panel p-6 rounded-3xl flex items-center justify-between border border-white/5 hover:border-brand-primary/20 transition-all">
+                                                <div key={u.id} className="glass-panel p-6 rounded-3xl flex items-center justify-between border border-white/5">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-12 h-12 bg-brand-primary/20 rounded-2xl flex items-center justify-center text-brand-primary font-black uppercase text-xl">{u.name[0]}</div>
                                                         <div>
                                                             <h4 className="font-black text-white uppercase text-sm">{u.name}</h4>
-                                                            <p className="text-[10px] text-gray-500 font-bold uppercase">{u.email} | {u.profession}</p>
+                                                            <p className="text-[10px] text-gray-500 font-bold uppercase">{u.email} | Trial: {u.usedFreeTrial ? 'SIM' : 'NÃO'}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-3">
                                                         <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>{u.paymentStatus}</span>
-                                                        <button onClick={() => { if(confirm(`Deseja excluir ${u.name}?`)) db.deleteUser(u.id).then(refresh) }} className="p-3 text-gray-500 hover:text-red-500 transition-colors"><Trash2 size={20}/></button>
+                                                        <button onClick={() => { if(confirm(`Excluir ${u.name}?`)) db.deleteUser(u.id).then(refresh) }} className="p-3 text-gray-500 hover:text-red-500 transition-colors"><Trash2 size={20}/></button>
                                                     </div>
                                                 </div>
-                                            )) : <p className="text-gray-500 italic uppercase font-black text-xs text-center py-20 border-2 border-dashed border-white/5 rounded-3xl">Nenhum cliente cadastrado no banco.</p>}
+                                            )) : <p className="text-gray-500 text-center py-20 font-black text-xs uppercase">Sem usuários cadastrados.</p>}
                                         </div>
                                     </div>
                                 )}
@@ -341,18 +337,18 @@ const App: React.FC = () => {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom">
                                         <div className="glass-panel p-10 rounded-[40px] border-b-8 border-brand-primary">
                                             <p className="text-6xl font-black text-white mb-2">{allUsers.length}</p>
-                                            <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Assinantes Atuais</span>
+                                            <span className="text-[11px] font-black text-gray-500 uppercase">Assinantes</span>
                                         </div>
                                         <div className="glass-panel p-10 rounded-[40px] border-b-8 border-brand-secondary">
                                             <p className="text-6xl font-black text-white mb-2">{posts.length}</p>
-                                            <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Anúncios no Ar</span>
+                                            <span className="text-[11px] font-black text-gray-500 uppercase">Anúncios Ativos</span>
                                         </div>
                                         <div className="glass-panel p-10 rounded-[40px] border-b-8 border-brand-accent">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <div className={`w-4 h-4 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-                                                <p className="text-2xl font-black text-white uppercase tracking-tighter">{isOnline ? 'Online' : 'Erro'}</p>
+                                                <p className="text-2xl font-black text-white uppercase">{isOnline ? 'Conectado' : 'Desconectado'}</p>
                                             </div>
-                                            <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Status Database</span>
+                                            <span className="text-[11px] font-black text-gray-500 uppercase">Status Cloud</span>
                                         </div>
                                     </div>
                                 )}
@@ -364,8 +360,8 @@ const App: React.FC = () => {
                 case 'REGISTER':
                     return (
                         <div className="flex-1 flex flex-col items-center justify-center p-4 pt-32 animate-in zoom-in pb-20">
-                            <div className="glass-panel p-12 rounded-[50px] w-full max-w-md border border-white/10 shadow-2xl mb-8">
-                                <h2 className="text-5xl font-black text-white uppercase tracking-tighter mb-10 text-center">{currentView === 'LOGIN' ? 'Entrar' : 'Cadastro'}</h2>
+                            <div className="glass-panel p-12 rounded-[50px] w-full max-w-md border border-white/10 shadow-2xl">
+                                <h2 className="text-5xl font-black text-white uppercase tracking-tighter mb-10 text-center">{currentView === 'LOGIN' ? 'Acessar' : 'Cadastrar'}</h2>
                                 <form onSubmit={currentView === 'LOGIN' ? handleLogin : async (e) => {
                                     e.preventDefault();
                                     const form = e.target as any;
@@ -376,98 +372,58 @@ const App: React.FC = () => {
                                             profession: form.profession.value, 
                                             phone: form.phone.value, 
                                             role: UserRole.ADVERTISER, 
-                                            paymentStatus: PaymentStatus.AWAITING 
+                                            paymentStatus: PaymentStatus.AWAITING,
+                                            usedFreeTrial: false 
                                         });
                                         setCurrentUser(u);
                                         saveToLocal(STORAGE_KEYS.SESSION, u);
                                         setCurrentView('PAYMENT');
                                         refresh();
-                                    } catch (err) { showToast("Erro ao criar cadastro.", "error"); }
+                                    } catch (err) { showToast("Erro ao criar conta.", "error"); }
                                 }} className="space-y-4">
                                     {currentView === 'REGISTER' && (
                                         <>
-                                            <input name="name" required placeholder="Seu Nome ou Empresa" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary font-bold transition-all" />
-                                            <select name="profession" className="w-full bg-brand-dark border border-white/10 p-5 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest outline-none cursor-pointer">
+                                            <input name="name" required placeholder="Nome Completo ou Empresa" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary" />
+                                            <select name="profession" className="w-full bg-brand-dark border border-white/10 p-5 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest outline-none">
                                                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
                                             </select>
-                                            <input name="phone" required placeholder="WhatsApp (DDD + Número)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary font-bold transition-all" />
+                                            <input name="phone" required placeholder="WhatsApp (ex: 11999998888)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary" />
                                         </>
                                     )}
-                                    <input name="email" required type="email" placeholder="Seu E-mail" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary font-bold transition-all" />
-                                    <input name="pass" required type="password" placeholder="Sua Senha" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary font-bold transition-all" />
-                                    <Button type="submit" className="w-full h-20 text-lg uppercase font-black shadow-lg">
-                                        {currentView === 'LOGIN' ? 'Acessar Painel' : 'Registrar Agora'}
+                                    <input name="email" required type="email" placeholder="E-mail" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary" />
+                                    <input name="pass" required type="password" placeholder="Senha" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-brand-primary" />
+                                    <Button type="submit" className="w-full h-20 text-lg uppercase font-black">
+                                        {currentView === 'LOGIN' ? 'Entrar Agora' : 'Criar Conta'}
                                     </Button>
-                                    <button type="button" onClick={() => setCurrentView(currentView === 'LOGIN' ? 'REGISTER' : 'LOGIN')} className="w-full text-center text-[10px] font-black uppercase text-gray-500 hover:text-white transition-all mt-6 tracking-widest">
-                                        {currentView === 'LOGIN' ? 'Ainda não é assinante? Cadastre-se' : 'Já possui conta? Clique para entrar'}
+                                    <button type="button" onClick={() => setCurrentView(currentView === 'LOGIN' ? 'REGISTER' : 'LOGIN')} className="w-full text-center text-[10px] font-black uppercase text-gray-500 hover:text-white mt-6 tracking-widest">
+                                        {currentView === 'LOGIN' ? 'Criar uma nova conta gratuita' : 'Já sou um anunciante'}
                                     </button>
                                 </form>
-                                
-                                <div className="mt-10 pt-8 border-t border-white/5 text-center flex flex-col items-center gap-4">
-                                    <button 
-                                        onClick={() => setShowDiag(!showDiag)}
-                                        className="text-[10px] font-black uppercase text-brand-primary flex items-center gap-2 hover:scale-105 transition-all"
-                                    >
-                                        <Terminal size={12}/> Problemas de Conexão? Diagnosticar
-                                    </button>
-                                    <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[8px] font-black uppercase ${isOnline ? 'text-green-500 bg-green-500/5 border border-green-500/10' : 'text-red-500 bg-red-500/5 border border-red-500/10'}`}>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                                        Banco de Dados: {isOnline ? 'Conectado' : 'Offline'}
-                                    </div>
-                                </div>
                             </div>
-
-                            {showDiag && (
-                                <div className="w-full max-w-md animate-in slide-in-from-top duration-300">
-                                    <div className="glass-panel p-8 rounded-[40px] border-brand-primary/20 bg-black/40">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h4 className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2"><Terminal size={14}/> Console Técnico</h4>
-                                            <button onClick={handleTestConnection} disabled={isTestingConn} className="text-[10px] font-black uppercase text-brand-accent hover:underline">Executar Teste</button>
-                                        </div>
-                                        <div className="bg-black/90 rounded-2xl p-6 font-mono text-[9px] space-y-1.5 max-h-[250px] overflow-y-auto border border-white/5 text-gray-400">
-                                            {diagLogs.length > 0 ? diagLogs.map((log, i) => (
-                                                <div key={i} className={log.includes('❌') ? 'text-red-400' : log.includes('✅') ? 'text-green-400' : ''}>{log}</div>
-                                            )) : <span className="italic">Clique em "Executar Teste" para analisar a conexão.</span>}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     );
 
                 case 'PAYMENT':
-                    if (!currentUser) {
-                        setCurrentView('LOGIN');
-                        return null;
-                    }
+                    if (!currentUser) { setCurrentView('LOGIN'); return null; }
                     return (
                         <div className="flex-1 max-w-7xl mx-auto px-4 pt-40 pb-20 animate-in zoom-in text-center">
-                            <div className="mb-16">
-                                <h2 className="text-6xl font-black text-white uppercase tracking-tighter mb-4">Planos de Exposição</h2>
-                                <p className="text-gray-400 font-bold italic">Selecione uma opção para manter seus anúncios no ar.</p>
-                            </div>
+                            <h2 className="text-6xl font-black text-white uppercase tracking-tighter mb-4">Escolha sua Ativação</h2>
+                            <p className="text-gray-400 font-bold mb-16 italic opacity-80">Mantenha seus anúncios ativos e em destaque no portal.</p>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                                 {storageService.getPlans().map(p => {
                                     const isFreeTrial = p.price === 0;
-                                    const canUseFree = isFreeTrial && !currentUser.usedFreeTrial;
-                                    
-                                    // Se for o plano de degustação e o usuário já usou, não mostramos nada ou mostramos bloqueado
-                                    if (isFreeTrial && currentUser.usedFreeTrial) {
-                                        return (
-                                            <div key={p.id} className="glass-panel p-10 rounded-[50px] border-2 border-white/5 opacity-40 grayscale flex flex-col items-center justify-center cursor-not-allowed relative overflow-hidden">
-                                                <div className="absolute top-10 -right-10 bg-red-500 text-white py-2 px-12 rotate-45 text-[8px] font-black uppercase tracking-widest shadow-xl">INDISPONÍVEL</div>
-                                                <Lock size={32} className="text-gray-500 mb-6"/>
-                                                <h3 className="text-xl font-black text-gray-500 uppercase mb-4">{p.name}</h3>
-                                                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">Você já utilizou sua degustação grátis.</p>
-                                            </div>
-                                        );
-                                    }
+                                    const alreadyUsed = !!currentUser.usedFreeTrial;
+                                    const blocked = isFreeTrial && alreadyUsed;
 
                                     return (
                                         <div 
                                             key={p.id} 
                                             onClick={() => {
+                                                if (blocked) {
+                                                    showToast("O plano de degustação só pode ser usado uma vez por usuário.", "error");
+                                                    return;
+                                                }
                                                 const expiresAt = new Date();
                                                 expiresAt.setDate(expiresAt.getDate() + p.durationDays);
                                                 
@@ -476,41 +432,36 @@ const App: React.FC = () => {
                                                     planId: p.id, 
                                                     paymentStatus: isFreeTrial ? PaymentStatus.CONFIRMED : PaymentStatus.AWAITING,
                                                     expiresAt: expiresAt.toISOString(),
-                                                    usedFreeTrial: currentUser.usedFreeTrial || isFreeTrial // Ativa a flag se escolher o grátis
+                                                    usedFreeTrial: alreadyUsed || isFreeTrial 
                                                 }).then(() => {
                                                     refresh();
                                                     setCurrentView('DASHBOARD');
-                                                    showToast(isFreeTrial ? "Degustação ativada!" : "Plano selecionado! Aguarde a confirmação do pagamento.");
+                                                    showToast(isFreeTrial ? "Degustação ativada!" : "Plano aguardando pagamento.");
                                                 });
                                             }} 
-                                            className="glass-panel p-10 rounded-[50px] border-2 border-white/5 hover:border-brand-primary transition-all cursor-pointer group hover:scale-[1.02] relative shadow-2xl"
+                                            className={`glass-panel p-10 rounded-[50px] border-2 transition-all relative shadow-2xl ${blocked ? 'opacity-40 grayscale cursor-not-allowed border-white/5' : 'border-white/5 hover:border-brand-primary cursor-pointer hover:scale-[1.02] group'}`}
                                         >
-                                            <h3 className="text-xl font-black text-white uppercase mb-4 group-hover:text-brand-primary transition-colors">{p.name}</h3>
+                                            {blocked && (
+                                                <div className="absolute top-10 -right-10 bg-red-600 text-white py-1.5 px-12 rotate-45 text-[8px] font-black uppercase shadow-xl z-20">UTILIZADO</div>
+                                            )}
+                                            {blocked ? <Lock size={32} className="mx-auto text-gray-600 mb-6"/> : <Tag size={32} className="mx-auto text-brand-primary mb-6 group-hover:scale-110 transition-transform"/>}
+                                            
+                                            <h3 className="text-xl font-black text-white uppercase mb-4">{p.name}</h3>
                                             <p className="text-4xl font-black text-brand-secondary mb-2">R$ {p.price.toFixed(2)}</p>
-                                            <p className="text-[10px] text-gray-500 font-black uppercase mb-10 tracking-[0.2em]">{p.durationDays} Dias</p>
-                                            <div className="h-px w-10 bg-white/10 mx-auto mb-8" />
-                                            <p className="text-[11px] text-gray-400 font-bold italic leading-relaxed opacity-80 mb-10">"{p.description}"</p>
-                                            <Button variant={isFreeTrial ? "outline" : "primary"} className="w-full h-14 text-[10px] font-black uppercase tracking-widest">{isFreeTrial ? "Ativar Agora" : "Assinar Plano"}</Button>
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mb-10 tracking-widest">{p.durationDays} Dias</p>
+                                            <p className="text-[11px] text-gray-400 font-bold italic mb-10 leading-relaxed">"{p.description}"</p>
+                                            <Button disabled={blocked} variant={isFreeTrial ? "outline" : "primary"} className="w-full h-14 uppercase text-[10px] font-black">
+                                                {blocked ? "Indisponível" : "Selecionar Plano"}
+                                            </Button>
                                         </div>
                                     );
                                 })}
-                            </div>
-                            
-                            <div className="mt-20 p-8 glass-panel rounded-[40px] max-w-2xl mx-auto border-brand-accent/20">
-                                <div className="flex items-center gap-4 mb-4 text-brand-accent">
-                                    <CreditCard size={24}/>
-                                    <h4 className="text-sm font-black uppercase tracking-widest">Informações de Pagamento</h4>
-                                </div>
-                                <p className="text-xs text-gray-400 text-left leading-relaxed">Após selecionar um plano pago, realize o PIX para a chave do portal. Seu acesso será liberado automaticamente após a identificação do pagamento pela nossa equipe técnica.</p>
                             </div>
                         </div>
                     );
 
                 case 'DASHBOARD':
-                    if (!currentUser) {
-                        setCurrentView('LOGIN');
-                        return <div className="p-20 text-center uppercase font-black">Carregando Login...</div>;
-                    }
+                    if (!currentUser) { setCurrentView('LOGIN'); return null; }
                     const myPosts = posts.filter(p => p.authorId === currentUser.id);
                     return (
                         <div className="pt-28 pb-40 max-w-6xl mx-auto px-4 animate-in slide-in-from-bottom">
@@ -519,30 +470,18 @@ const App: React.FC = () => {
                                     <div className="flex items-center gap-3 mb-6">
                                         <div className="p-4 bg-brand-primary/20 rounded-3xl"><Wand2 className="text-brand-primary" size={32}/></div>
                                         <div>
-                                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Criação Mágica IA</h2>
-                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">A IA cria o conteúdo e a imagem para você.</p>
+                                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Gerador Mágico IA</h2>
+                                            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Criação instantânea de anúncios e imagens publicitárias.</p>
                                         </div>
                                     </div>
                                     <div className="flex flex-col md:flex-row gap-4">
-                                        <input value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="Ex: Vendo marmitex caseira com entrega rápida..." className="flex-1 bg-white/5 border border-white/10 p-6 rounded-3xl text-white outline-none focus:border-brand-primary transition-all text-sm" />
-                                        <Button onClick={handleMagicGenerate} isLoading={isLoading} className="h-20 md:w-64 font-black text-sm uppercase tracking-widest">Gerar Anúncio</Button>
+                                        <input value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="Descreva o que quer anunciar..." className="flex-1 bg-white/5 border border-white/10 p-6 rounded-3xl text-white outline-none focus:border-brand-primary transition-all text-sm" />
+                                        <Button onClick={handleMagicGenerate} isLoading={isLoading} className="h-20 md:w-64 font-black text-sm uppercase tracking-widest">Gerar Agora</Button>
                                     </div>
                                 </div>
                              </div>
-                             
-                             <div className="flex items-center gap-3 mb-10 px-4">
-                                <ImageIcon className="text-brand-secondary" size={24}/>
-                                <h3 className="text-xl font-black text-white uppercase tracking-tighter">Meus Classificados</h3>
-                             </div>
-
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                                 {myPosts.map(p => <PostCard key={p.id} post={p} author={currentUser} />)}
-                                {myPosts.length === 0 && (
-                                    <div className="md:col-span-2 lg:col-span-3 py-32 bg-white/5 rounded-[50px] border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-center px-10">
-                                        <div className="p-6 bg-white/5 rounded-full mb-6 text-gray-600"><Plus size={48}/></div>
-                                        <p className="text-gray-500 font-black uppercase text-xs tracking-widest">Você ainda não publicou nada. Use o gerador acima para começar!</p>
-                                    </div>
-                                )}
                              </div>
                         </div>
                     );
@@ -555,72 +494,35 @@ const App: React.FC = () => {
                     });
                     return (
                         <div className="animate-in fade-in duration-1000 pb-40">
-                            <section className="relative pt-48 pb-24 overflow-hidden">
-                                <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 via-brand-dark to-brand-secondary/5" />
-                                <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative z-10">
-                                    <div className="text-center lg:text-left">
-                                        <div className="inline-block px-5 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-black text-brand-accent uppercase tracking-[0.2em] mb-8">Portal Oficial Hélio Júnior</div>
-                                        <h1 className="text-6xl md:text-8xl font-black text-white mb-8 uppercase tracking-tighter leading-[0.9]">{siteConfig.heroTitle}</h1>
-                                        <p className="text-xl text-gray-400 italic mb-14 max-w-xl mx-auto lg:mx-0">"{siteConfig.heroSubtitle}"</p>
-                                        <div className="flex flex-wrap gap-5 justify-center lg:justify-start">
-                                            <Button onClick={() => document.getElementById('ads')?.scrollIntoView({behavior:'smooth'})} className="h-16 px-10 font-black">Explorar Negócios</Button>
-                                            <Button variant="outline" onClick={() => setCurrentView('REGISTER')} className="h-16 px-10 font-black">Anunciar Agora</Button>
-                                        </div>
-                                    </div>
-                                    <div className="aspect-video rounded-[60px] overflow-hidden border border-white/10 shadow-3xl group relative">
-                                        <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover transition-transform duration-[2000ms] group-hover:scale-105" alt="Hélio Júnior" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/40 to-transparent" />
+                            <section className="relative pt-48 pb-24 text-center">
+                                <div className="max-w-7xl mx-auto px-4 relative z-10">
+                                    <div className="inline-block px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-black text-brand-accent uppercase tracking-widest mb-8">Comunicação e Credibilidade</div>
+                                    <h1 className="text-6xl md:text-8xl font-black text-white mb-8 uppercase tracking-tighter leading-none">{siteConfig.heroTitle}</h1>
+                                    <p className="text-xl text-gray-400 italic mb-14 max-w-xl mx-auto opacity-80">"{siteConfig.heroSubtitle}"</p>
+                                    <div className="flex justify-center gap-5">
+                                        <Button onClick={() => document.getElementById('ads')?.scrollIntoView({behavior:'smooth'})} className="h-16 px-10 font-black uppercase text-xs tracking-widest">Ver Ofertas</Button>
+                                        <Button variant="outline" onClick={() => setCurrentView('REGISTER')} className="h-16 px-10 font-black uppercase text-xs tracking-widest">Anunciar Aqui</Button>
                                     </div>
                                 </div>
                             </section>
 
-                            <section className="max-w-7xl mx-auto px-4 mb-32 relative z-10">
-                                 <div className="flex items-center gap-3 mb-10 px-4">
-                                    <Sparkles className="text-brand-accent animate-pulse" size={20}/>
-                                    <h3 className="text-xs font-black text-white uppercase tracking-widest">Principais Destaques</h3>
-                                 </div>
-                                 <AdSlider ads={confirmedPosts.slice(0, 10)} allUsers={allUsers} />
-                            </section>
-
-                            <section id="ads" className="max-w-7xl mx-auto px-4">
-                                 <div className="flex flex-col md:flex-row justify-between items-center mb-16 gap-10 px-4">
-                                    <h2 className="text-5xl font-black text-white uppercase tracking-tighter">Classificados</h2>
-                                    <div className="flex flex-wrap justify-center gap-3">
-                                        <button onClick={() => setFilterCategory('ALL')} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${filterCategory === 'ALL' ? 'bg-white text-brand-dark border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}>Todos</button>
-                                        {categories.map(c => <button key={c} onClick={() => setFilterCategory(c)} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${filterCategory === c ? 'bg-brand-primary text-white border-brand-primary shadow-xl shadow-brand-primary/20' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}>{c}</button>)}
-                                    </div>
-                                 </div>
-                                 
-                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                                    {confirmedPosts.filter(p => filterCategory === 'ALL' || p.category === filterCategory).map(p => (
-                                        <PostCard key={p.id} post={p} author={allUsers.find(u => u.id === p.authorId)} />
-                                    ))}
-                                    {confirmedPosts.length === 0 && (
-                                        <div className="col-span-full py-40 text-center glass-panel rounded-[50px] border-dashed border-2 border-white/10">
-                                            <Info size={40} className="mx-auto text-gray-700 mb-4"/>
-                                            <p className="text-gray-600 font-black uppercase text-xs tracking-widest">Nenhum anúncio ativo no momento.</p>
-                                        </div>
-                                    )}
+                            <section id="ads" className="max-w-7xl mx-auto px-4 mt-20">
+                                 <AdSlider ads={confirmedPosts.slice(0, 5)} allUsers={allUsers} />
+                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mt-20">
+                                    {confirmedPosts.map(p => <PostCard key={p.id} post={p} author={allUsers.find(u => u.id === p.authorId)} />)}
                                  </div>
                             </section>
                         </div>
                     );
             }
         } catch (err) {
-            console.error("Erro fatal na renderização da view:", err);
-            return (
-                <div className="flex-1 flex flex-col items-center justify-center p-20 text-center animate-in fade-in">
-                    <AlertTriangle size={64} className="text-red-500 mb-6" />
-                    <h2 className="text-3xl font-black text-white uppercase mb-4">Erro de Interface</h2>
-                    <p className="text-gray-400 mb-8 max-w-md">Algo deu errado ao carregar esta tela. Tente recarregar a página ou voltar para o início.</p>
-                    <Button onClick={() => { setCurrentView('HOME'); window.location.reload(); }}>Recarregar Sistema</Button>
-                </div>
-            );
+            console.error("Erro fatal render:", err);
+            return <div className="p-20 text-center uppercase font-black">Sistema reiniciando...</div>;
         }
     };
 
     return (
-        <div className="min-h-screen bg-brand-dark text-gray-100 flex flex-col font-sans selection:bg-brand-primary selection:text-white">
+        <div className="min-h-screen bg-brand-dark text-gray-100 flex flex-col font-sans">
             <Navbar 
                 currentUser={currentUser} 
                 setCurrentView={setCurrentView} 
@@ -629,27 +531,15 @@ const App: React.FC = () => {
                 config={siteConfig} 
                 isOnline={isOnline} 
             />
-            
-            <main className="flex-1 flex flex-col">
-                {renderContent()}
-            </main>
-
+            <main className="flex-1 flex flex-col">{renderContent()}</main>
             {toast && (
-                <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[300] px-10 py-5 rounded-[30px] shadow-3xl border flex items-center gap-4 animate-in slide-in-from-bottom duration-500 backdrop-blur-xl ${toast.t === 'success' ? 'bg-green-500/90 border-green-400 text-white' : 'bg-red-500/90 border-red-400 text-white'}`}>
-                    {toast.t === 'success' ? <CheckCircle2 size={24}/> : <AlertTriangle size={24}/>}
-                    <span className="font-black uppercase text-xs tracking-[0.1em]">{toast.m}</span>
+                <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[300] px-10 py-5 rounded-[30px] shadow-3xl border flex items-center gap-4 animate-in slide-in-from-bottom ${toast.t === 'success' ? 'bg-green-600/90' : 'bg-red-600/90'}`}>
+                    <span className="font-black uppercase text-[10px] tracking-widest text-white">{toast.m}</span>
                 </div>
             )}
-
             {isLoading && (
                 <div className="fixed inset-0 z-[500] bg-brand-dark/80 backdrop-blur-xl flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-6">
-                        <div className="relative">
-                            <Loader2 className="animate-spin text-brand-primary" size={80} strokeWidth={1} />
-                            <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-brand-accent animate-pulse" size={24} />
-                        </div>
-                        <span className="text-[11px] font-black text-brand-primary uppercase tracking-[0.3em] animate-pulse">Sincronizando Banco de Dados</span>
-                    </div>
+                    <Loader2 className="animate-spin text-brand-primary" size={60} />
                 </div>
             )}
         </div>
