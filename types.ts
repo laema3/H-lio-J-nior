@@ -1,7 +1,8 @@
 
 export enum UserRole {
   ADMIN = 'ADMIN',
-  ADVERTISER = 'ADVERTISER'
+  MODERATOR = 'MODERADOR',
+  ADVERTISER = 'ANUNCIANTE'
 }
 
 export enum PaymentStatus {
@@ -18,31 +19,27 @@ export interface Plan {
   description: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+}
+
 export interface SiteConfig {
   heroTitle: string;
   heroSubtitle: string;
   heroImageUrl: string;
   heroLabel: string;
   headerLogoUrl?: string;
-  footerLogoUrl?: string;
-  address?: string;
-  phone?: string;
-  whatsapp?: string;
-  instagramUrl?: string;
-  facebookUrl?: string;
-  youtubeUrl?: string;
-  // Scripts e Tags
-  googleTagId?: string;
-  facebookPixelId?: string;
-  // Dados Financeiros
   pixKey?: string;
   pixName?: string;
+  whatsapp?: string;
 }
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: UserRole;
   profession?: string;
   phone?: string;
@@ -62,7 +59,8 @@ export interface Post {
   content: string;
   whatsapp?: string;
   phone?: string;
-  imageUrl?: string;
+  imageUrl?: string; 
+  logoUrl?: string; 
   createdAt: string;
 }
 
