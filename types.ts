@@ -31,6 +31,9 @@ export interface SiteConfig {
   instagramUrl?: string;
   facebookUrl?: string;
   youtubeUrl?: string;
+  // Scripts e Tags
+  googleTagId?: string;
+  facebookPixelId?: string;
   // Dados Financeiros
   pixKey?: string;
   pixName?: string;
@@ -47,7 +50,7 @@ export interface User {
   paymentStatus: PaymentStatus;
   expiresAt?: string; 
   createdAt: string;
-  usedFreeTrial?: boolean; // Rastreia se o usuário já usou o plano de degustação
+  usedFreeTrial?: boolean;
 }
 
 export interface Post {
