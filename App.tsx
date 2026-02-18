@@ -12,7 +12,7 @@ import {
     MessageCircle, Send, X, Bot, Loader2, Sparkles, Volume2,
     Image as ImageIcon, Users, CheckCircle2, Layers, MapPin, PhoneCall,
     Database, Activity, Globe, LayoutDashboard, RefreshCcw, ChevronLeft, ChevronRight, Wand2, Search, Terminal,
-    ShieldAlert, Info
+    ShieldAlert, Info, Lock
 } from 'lucide-react';
 
 type AdminSubView = 'INICIO' | 'CLIENTES' | 'ANUNCIOS' | 'AJUSTES' | 'CATEGORIAS';
@@ -147,7 +147,17 @@ const App: React.FC = () => {
             const session = getFromLocal(STORAGE_KEYS.SESSION, null);
             if (session) {
                 const fresh = (u || []).find((usr: User) => usr.id === session.id);
-                if (fresh) setCurrentUser(fresh);
+                if (fresh) {
+                    setCurrentUser(fresh);
+                    // Regra de Redirecionamento por Expiração
+                    if (fresh.role === UserRole.ADVERTISER && fresh.expiresAt) {
+                        const expired = new Date(fresh.expiresAt) < new Date();
+                        if (expired) {
+                           setCurrentView('PAYMENT');
+                           showToast("Seu plano expirou. Por favor, escolha uma renovação paga.", "error");
+                        }
+                    }
+                }
             }
         } catch (e) {
             console.error("Erro crítico ao atualizar dados:", e);
@@ -203,12 +213,10 @@ const App: React.FC = () => {
         }
     };
 
-    // Fix: Implemented handleMagicGenerate to handle AI-powered ad generation
     const handleMagicGenerate = async () => {
         if (!magicPrompt.trim() || !currentUser) return;
         setIsLoading(true);
         try {
-            // Gera copy usando Gemini
             const result = await generateAdCopy(currentUser.profession || 'Geral', magicPrompt, 'short');
             let title = "Novo Anúncio";
             let content = "";
@@ -220,7 +228,6 @@ const App: React.FC = () => {
                 content = result as string;
             }
 
-            // Gera imagem usando Gemini
             const imageUrl = await generateAdImage(`${title}: ${content}`);
 
             const newPost: Post = {
@@ -425,6 +432,77 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    );
+
+                case 'PAYMENT':
+                    if (!currentUser) {
+                        setCurrentView('LOGIN');
+                        return null;
+                    }
+                    return (
+                        <div className="flex-1 max-w-7xl mx-auto px-4 pt-40 pb-20 animate-in zoom-in text-center">
+                            <div className="mb-16">
+                                <h2 className="text-6xl font-black text-white uppercase tracking-tighter mb-4">Planos de Exposição</h2>
+                                <p className="text-gray-400 font-bold italic">Selecione uma opção para manter seus anúncios no ar.</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                {storageService.getPlans().map(p => {
+                                    const isFreeTrial = p.price === 0;
+                                    const canUseFree = isFreeTrial && !currentUser.usedFreeTrial;
+                                    
+                                    // Se for o plano de degustação e o usuário já usou, não mostramos nada ou mostramos bloqueado
+                                    if (isFreeTrial && currentUser.usedFreeTrial) {
+                                        return (
+                                            <div key={p.id} className="glass-panel p-10 rounded-[50px] border-2 border-white/5 opacity-40 grayscale flex flex-col items-center justify-center cursor-not-allowed relative overflow-hidden">
+                                                <div className="absolute top-10 -right-10 bg-red-500 text-white py-2 px-12 rotate-45 text-[8px] font-black uppercase tracking-widest shadow-xl">INDISPONÍVEL</div>
+                                                <Lock size={32} className="text-gray-500 mb-6"/>
+                                                <h3 className="text-xl font-black text-gray-500 uppercase mb-4">{p.name}</h3>
+                                                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">Você já utilizou sua degustação grátis.</p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div 
+                                            key={p.id} 
+                                            onClick={() => {
+                                                const expiresAt = new Date();
+                                                expiresAt.setDate(expiresAt.getDate() + p.durationDays);
+                                                
+                                                storageService.updateUser({ 
+                                                    ...currentUser, 
+                                                    planId: p.id, 
+                                                    paymentStatus: isFreeTrial ? PaymentStatus.CONFIRMED : PaymentStatus.AWAITING,
+                                                    expiresAt: expiresAt.toISOString(),
+                                                    usedFreeTrial: currentUser.usedFreeTrial || isFreeTrial // Ativa a flag se escolher o grátis
+                                                }).then(() => {
+                                                    refresh();
+                                                    setCurrentView('DASHBOARD');
+                                                    showToast(isFreeTrial ? "Degustação ativada!" : "Plano selecionado! Aguarde a confirmação do pagamento.");
+                                                });
+                                            }} 
+                                            className="glass-panel p-10 rounded-[50px] border-2 border-white/5 hover:border-brand-primary transition-all cursor-pointer group hover:scale-[1.02] relative shadow-2xl"
+                                        >
+                                            <h3 className="text-xl font-black text-white uppercase mb-4 group-hover:text-brand-primary transition-colors">{p.name}</h3>
+                                            <p className="text-4xl font-black text-brand-secondary mb-2">R$ {p.price.toFixed(2)}</p>
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mb-10 tracking-[0.2em]">{p.durationDays} Dias</p>
+                                            <div className="h-px w-10 bg-white/10 mx-auto mb-8" />
+                                            <p className="text-[11px] text-gray-400 font-bold italic leading-relaxed opacity-80 mb-10">"{p.description}"</p>
+                                            <Button variant={isFreeTrial ? "outline" : "primary"} className="w-full h-14 text-[10px] font-black uppercase tracking-widest">{isFreeTrial ? "Ativar Agora" : "Assinar Plano"}</Button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            
+                            <div className="mt-20 p-8 glass-panel rounded-[40px] max-w-2xl mx-auto border-brand-accent/20">
+                                <div className="flex items-center gap-4 mb-4 text-brand-accent">
+                                    <CreditCard size={24}/>
+                                    <h4 className="text-sm font-black uppercase tracking-widest">Informações de Pagamento</h4>
+                                </div>
+                                <p className="text-xs text-gray-400 text-left leading-relaxed">Após selecionar um plano pago, realize o PIX para a chave do portal. Seu acesso será liberado automaticamente após a identificação do pagamento pela nossa equipe técnica.</p>
+                            </div>
                         </div>
                     );
 

@@ -47,6 +47,7 @@ export interface User {
   paymentStatus: PaymentStatus;
   expiresAt?: string; 
   createdAt: string;
+  usedFreeTrial?: boolean; // Rastreia se o usuário já usou o plano de degustação
 }
 
 export interface Post {
