@@ -1,16 +1,55 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Post } from '../types';
-import { User as UserIcon, MessageCircle, Phone, Award, Zap } from 'lucide-react';
+import { User as UserIcon, MessageCircle, Phone, Award, Zap, Volume2, Loader2, Play, Pause } from 'lucide-react';
+import { generateAudioTTS } from '../services/geminiService';
 
 interface PostCardProps {
   post: Post;
 }
 
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [audioInstance, setAudioInstance] = useState<HTMLAudioElement | null>(null);
+
   const handleWhatsApp = () => {
     if (!post.whatsapp) return;
     window.open(`https://wa.me/${post.whatsapp.replace(/\D/g, '')}`, '_blank');
+  };
+
+  const handlePlayLocution = async () => {
+    if (isPlaying && audioInstance) {
+      audioInstance.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    if (audioInstance) {
+      audioInstance.play();
+      setIsPlaying(true);
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+    try {
+      const base64Audio = await generateAudioTTS(post.content);
+      if (base64Audio) {
+        // A IA retorna PCM raw. Para fins de player simples no navegador, 
+        // vamos converter ou usar um Blob se fosse um arquivo, 
+        // mas o gemini-tts permite gerar o stream. 
+        // Aqui criamos um elemento de áudio para a base64 (ajustando o mime-type se necessário)
+        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`); // O browser costuma aceitar wav/mp3 em base64
+        audio.onended = () => setIsPlaying(false);
+        setAudioInstance(audio);
+        audio.play();
+        setIsPlaying(true);
+      }
+    } catch (err) {
+      console.error("Erro ao tocar áudio:", err);
+    } finally {
+      setIsGeneratingAudio(false);
+    }
   };
 
   const imageUrl = post.imageUrl || `https://picsum.photos/600/337?random=${post.id}`;
@@ -22,6 +61,20 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         <img src={imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[2000ms]" alt={post.title} />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-transparent to-transparent opacity-80" />
         
+        <button 
+          onClick={handlePlayLocution}
+          disabled={isGeneratingAudio}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-brand-primary/20 backdrop-blur-3xl rounded-full flex items-center justify-center border border-white/20 hover:scale-110 hover:bg-brand-primary transition-all group/play"
+        >
+          {isGeneratingAudio ? (
+            <Loader2 size={32} className="text-white animate-spin" />
+          ) : isPlaying ? (
+            <Pause size={32} className="text-white fill-white" />
+          ) : (
+            <Play size={32} className="text-white fill-white translate-x-1" />
+          )}
+        </button>
+
         {logoUrl && (
             <div className="absolute bottom-6 left-6 w-16 h-16 bg-white rounded-[22px] p-2 shadow-2xl border border-brand-primary/20 transform -rotate-3 group-hover:rotate-0 transition-transform">
                 <img src={logoUrl} className="w-full h-full object-contain" alt="Logo" />
@@ -34,9 +87,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       </div>
 
       <div className="p-10 flex flex-col flex-grow">
-        <div className="flex items-center gap-3 mb-6">
-            <Zap size={14} className="text-brand-gold" />
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{post.authorName}</span>
+        <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Zap size={14} className="text-brand-gold" />
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{post.authorName}</span>
+            </div>
+            {isPlaying && (
+              <div className="flex gap-1">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="w-1 bg-brand-primary animate-bounce" style={{height: `${Math.random() * 16 + 4}px`, animationDelay: `${i * 0.1}s`}} />
+                ))}
+              </div>
+            )}
         </div>
         <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 leading-none group-hover:text-brand-primary transition-colors">{post.title}</h3>
         <p className="text-sm text-gray-400 mb-10 italic opacity-80 leading-relaxed line-clamp-3">"{post.content}"</p>

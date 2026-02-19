@@ -62,6 +62,7 @@ export interface Post {
   phone?: string;
   imageUrl?: string; 
   logoUrl?: string; 
+  audioData?: string; // Base64 do áudio gerado
   createdAt: string;
 }
 
