@@ -164,7 +164,7 @@ const App: React.FC = () => {
                                 </div>
                                 <div className="relative animate-float">
                                     <div className="glass-panel p-3 rounded-[60px] border-white/10 shadow-3xl rotate-2">
-                                        <img src={siteConfig.heroImageUrl} className="w-full aspect-square object-cover rounded-[50px] shadow-2xl" alt="Mesa de Rádio" />
+                                        <img src={siteConfig.heroImageUrl} className="w-full aspect-video object-cover rounded-[50px] shadow-2xl" alt="Mesa de Rádio" />
                                         <div className="absolute -bottom-10 -left-10 glass-panel p-8 rounded-[40px] border-brand-gold/30 shadow-2xl hidden md:block">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 bg-brand-gold rounded-full flex items-center justify-center text-brand-dark"><TrendingUp size={24}/></div>
