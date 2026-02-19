@@ -2,14 +2,26 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 
 /**
+ * Helper para inicializar o cliente e validar a chave
+ */
+const getAiClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.error("ERRO: API_KEY não configurada na Vercel! Vá em Settings > Environment Variables e adicione a API_KEY.");
+    throw new Error("Configuração de IA Pendente");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
+/**
  * Gera copy para o anúncio ou um script de rádio
  */
 export const generateAdCopy = async (profession: string, keywords: string, type: 'short' | 'radio' = 'short'): Promise<{title: string, content: string} | string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = getAiClient();
     
     if (type === 'short') {
-      const prompt = `Crie um anúncio de impacto para um portal de classificados. 
+      const prompt = `Crie um anúncio de impacto para um portal de classificados para rádio e web. 
       Profissão/Ramo: ${profession}. 
       Contexto: ${keywords}. 
       Retorne APENAS um JSON no formato: {"title": "Título chamativo", "content": "Descrição persuasiva de até 60 palavras"}`;
@@ -35,7 +47,7 @@ export const generateAdCopy = async (profession: string, keywords: string, type:
     }
   } catch (error) {
     console.error("Erro ao gerar anúncio com Gemini:", error);
-    return "Erro ao conectar com a IA Inteligente.";
+    return "Erro ao conectar com a IA Inteligente. Verifique a API_KEY na Vercel.";
   }
 };
 
@@ -44,7 +56,7 @@ export const generateAdCopy = async (profession: string, keywords: string, type:
  */
 export const generateAdImage = async (prompt: string): Promise<string | undefined> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = getAiClient();
     const imagePrompt = `Uma fotografia publicitária profissional, estilo estúdio ou ambiente realístico de alta qualidade, para: ${prompt}. Iluminação cinematográfica, foco nítido, cores vibrantes, composição limpa para anúncio.`;
 
     const response = await ai.models.generateContent({
@@ -74,8 +86,7 @@ export const generateAdImage = async (prompt: string): Promise<string | undefine
  */
 export const generateAudioTTS = async (text: string): Promise<string | undefined> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    // Limpar o texto de tags de rádio [Trilha] etc para o TTS ficar limpo
+    const ai = getAiClient();
     const cleanText = text.replace(/\[.*?\]/g, '').trim();
 
     const response = await ai.models.generateContent({
@@ -85,7 +96,7 @@ export const generateAudioTTS = async (text: string): Promise<string | undefined
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore tem um tom firme e profissional
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },
       },
@@ -103,7 +114,7 @@ export const generateAudioTTS = async (text: string): Promise<string | undefined
  */
 export const chatWithAssistant = async (message: string, history: {role: string, parts: {text: string}[]}[]) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = getAiClient();
     
     const systemInstruction = `Você é o Assistente Virtual do Portal Hélio Júnior Radialista. 
     Seu tom é de radialista: vibrante, cordial e muito amigável.
@@ -125,6 +136,6 @@ export const chatWithAssistant = async (message: string, history: {role: string,
     return response.text || "Desculpe, tive um problema técnico. Pode repetir?";
   } catch (error) {
     console.error("Erro no Chat AI:", error);
-    return "Estou com dificuldades de conexão. Que tal tentar o WhatsApp direto?";
+    return "Estou com dificuldades de conexão. Verifique se a API_KEY está correta na Vercel.";
   }
 };
