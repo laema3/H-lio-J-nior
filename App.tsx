@@ -7,11 +7,11 @@ import { Button } from './components/Button';
 import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { 
-    Trash2, Edit, Users, Check, X, AlertTriangle, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Lock, Unlock, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Instagram, Facebook, Crown, ArrowRight
+    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Lock, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Instagram, Facebook, Crown, ArrowRight, Ban
 } from 'lucide-react';
 
-const SESSION_KEY = 'helio_junior_vip_session_v7';
-const ADMIN_WHATSAPP = '5534999982000';
+const SESSION_KEY = 'helio_junior_vip_session_v8';
+const NOTIFY_WHATSAPP = '5534999982000';
 
 export const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
@@ -32,6 +32,7 @@ export const App: React.FC = () => {
         heroTitle: 'Voz que Vende',
         heroSubtitle: 'Seu portal de classificados com o impacto do rádio digital.',
         heroImageUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=1920',
+        bannerFooterUrl: 'https://images.unsplash.com/photo-1514320291944-9e1aabc932bb?auto=format&fit=crop&q=80&w=1920',
         whatsapp: '5534999982000',
         phone: '34999982000',
         instagram: '@heliojunior',
@@ -47,6 +48,8 @@ export const App: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState('Comércio');
 
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
+    const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
+    const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
 
     const showToast = useCallback((m: string, t: 'success' | 'error' = 'success') => {
         setToast({ m, t });
@@ -70,9 +73,9 @@ export const App: React.FC = () => {
         });
     };
 
-    const notifyNewUser = (user: User) => {
-        const msg = encodeURIComponent(`🎙️ *NOVO ASSINANTE NO PORTAL*\n\n👤 Nome: ${user.name}\n📧 Email: ${user.email}\n📱 WhatsApp: ${user.phone}\n🚀 Status: Aguardando Boas-vindas`);
-        window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${msg}`, '_blank');
+    const notifyAdminNewUser = (user: User) => {
+        const msg = encodeURIComponent(`🎙️ *NOVA INSCRIÇÃO NO PORTAL*\n\n👤 Nome: ${user.name}\n📧 Email: ${user.email}\n📱 WhatsApp: ${user.phone}\n🚀 Status: Ativo/Degustação`);
+        window.open(`https://wa.me/${NOTIFY_WHATSAPP}?text=${msg}`, '_blank');
     };
 
     const refreshData = async () => {
@@ -91,8 +94,13 @@ export const App: React.FC = () => {
             if (currentUser) {
                 const fresh = u.find((usr: User) => usr.email.toLowerCase() === currentUser.email.toLowerCase());
                 if (fresh) {
-                    setCurrentUser(fresh);
-                    localStorage.setItem(SESSION_KEY, JSON.stringify(fresh));
+                    if (fresh.status === 'BLOCKED') {
+                        handleLogout();
+                        showToast("Sua conta foi bloqueada pelo administrador.", "error");
+                    } else {
+                        setCurrentUser(fresh);
+                        localStorage.setItem(SESSION_KEY, JSON.stringify(fresh));
+                    }
                 }
             }
         } finally { setIsLoadingData(false); }
@@ -100,29 +108,24 @@ export const App: React.FC = () => {
 
     useEffect(() => { refreshData(); }, []);
 
-    const isTrialExpired = useMemo(() => {
-        if (!currentUser?.expiresAt) return false;
-        return new Date() > new Date(currentUser.expiresAt);
-    }, [currentUser]);
-
     const planCountdown = useMemo(() => {
         if (!currentUser?.expiresAt) return null;
         const diff = new Date(currentUser.expiresAt).getTime() - new Date().getTime();
-        if (diff <= 0) return "Plano Expirado";
+        if (diff <= 0) return "Expirado";
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        return `${days}d ${hours}h restantes`;
+        return `${days} dias restantes`;
     }, [currentUser]);
 
     const handleLogout = () => {
         localStorage.removeItem(SESSION_KEY);
         setCurrentUser(null);
         setCurrentView('HOME');
-        showToast("Até breve!");
     };
 
-    const userPostsThisMonth = useMemo(() => {
+    const userPosts = useMemo(() => {
         if (!currentUser) return [];
+        // ADMIN vê tudo em ANUNCIOS, mas no Dashboard dele vê os que ele criou se quiser.
+        // Aqui garantimos que o ASSINANTE veja apenas os DELE.
         return posts.filter(p => p.authorId === currentUser.id);
     }, [posts, currentUser]);
 
@@ -131,9 +134,9 @@ export const App: React.FC = () => {
             <Navbar currentUser={currentUser} setCurrentView={setCurrentView} currentView={currentView} onLogout={handleLogout} config={siteConfig} isOnline={!isLoadingData} />
             
             <main className="flex-1">
+                {/* HOME - EXATAMENTE COMO ESTAVA */}
                 {currentView === 'HOME' && (
                     <div className="animate-in fade-in duration-700">
-                        {/* Hero Section - Reduced Spacing */}
                         <section className="pt-24 pb-8 lg:pt-28 lg:pb-10 px-6">
                             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
                                 <div className="space-y-5 text-center lg:text-left">
@@ -158,7 +161,6 @@ export const App: React.FC = () => {
                             </div>
                         </section>
 
-                        {/* Block 2: Verified Advertisers */}
                         <section id="ads" className="max-w-7xl mx-auto px-6 py-10">
                             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
                                 <div>
@@ -183,7 +185,6 @@ export const App: React.FC = () => {
                             )}
                         </section>
 
-                        {/* Block 3: Plans Section */}
                         <section className="bg-white/[0.02] border-y border-white/5 py-16 px-6">
                             <div className="max-w-7xl mx-auto">
                                 <div className="text-center mb-16">
@@ -212,6 +213,7 @@ export const App: React.FC = () => {
                     </div>
                 )}
 
+                {/* LOGIN / REGISTER */}
                 {(currentView === 'LOGIN' || currentView === 'REGISTER') && (
                     <div className="min-h-screen flex items-center justify-center p-6 bg-brand-dark pt-16">
                         <div className="glass-panel p-10 md:p-14 rounded-[50px] w-full max-w-xl text-center shadow-3xl border-orange-600/10">
@@ -227,18 +229,18 @@ export const App: React.FC = () => {
                                             setCurrentUser(u);
                                             localStorage.setItem(SESSION_KEY, JSON.stringify(u));
                                             setCurrentView(u.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD');
-                                        } else showToast("Acesso Negado", "error");
+                                        } else showToast("Acesso Negado ou Conta Bloqueada", "error");
                                     } else {
                                         const exp = new Date(); exp.setDate(exp.getDate() + 30);
-                                        const newUser = { 
+                                        const newUser: Partial<User> = { 
                                             name: fd.get('name') as string, email: fd.get('email') as string, password: fd.get('password') as string, 
                                             phone: fd.get('phone') as string, role: UserRole.ADVERTISER, paymentStatus: PaymentStatus.CONFIRMED,
-                                            planId: 'p_free', expiresAt: exp.toISOString(), createdAt: new Date().toISOString()
+                                            planId: 'p_free', expiresAt: exp.toISOString(), createdAt: new Date().toISOString(), status: 'ACTIVE'
                                         };
                                         const saved = await db.addUser(newUser);
                                         if (saved) { 
                                             setCurrentUser(saved); localStorage.setItem(SESSION_KEY, JSON.stringify(saved));
-                                            notifyNewUser(saved as User);
+                                            notifyAdminNewUser(saved as User);
                                             setCurrentView('DASHBOARD'); 
                                         }
                                     }
@@ -263,9 +265,9 @@ export const App: React.FC = () => {
                     </div>
                 )}
 
+                {/* PAINEL DO ASSINANTE - SÓ SEUS ANÚNCIOS */}
                 {currentView === 'DASHBOARD' && currentUser && (
                    <div className="pt-24 pb-32 max-w-7xl mx-auto px-6">
-                        {/* Header Dashboard */}
                         <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-12 border-b border-white/5 pb-8">
                             <div className="flex items-center gap-6">
                                 <div className="w-16 h-16 bg-orange-600 rounded-[20px] flex items-center justify-center text-white font-black text-2xl shadow-xl">{currentUser.name[0]}</div>
@@ -276,59 +278,30 @@ export const App: React.FC = () => {
                                             <Clock size={10} className="text-orange-500 animate-pulse" />
                                             <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest">{planCountdown}</span>
                                         </div>
-                                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{currentUser.email}</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex gap-4">
-                                {isTrialExpired ? (
-                                    <button onClick={() => window.open(`https://wa.me/${siteConfig.whatsapp}?text=Quero renovar meu plano VIP`, '_blank')} className="h-14 px-8 bg-orange-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg flex items-center gap-2 animate-pulse">
-                                        <ArrowRight size={16}/> Renovar Plano
-                                    </button>
-                                ) : (
-                                    <Button className="h-14 px-8 rounded-2xl" onClick={() => {
-                                        if (userPostsThisMonth.length >= 4) {
-                                            showToast("Limite de 4 anúncios por mês atingido", "error");
-                                            return;
-                                        }
-                                        setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] });
-                                    }}>
-                                        <PlusCircle size={20}/> Criar Anúncio
-                                    </Button>
-                                )}
-                            </div>
+                            <Button className="h-14 px-8 rounded-2xl" onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
+                                <PlusCircle size={20}/> Criar Anúncio
+                            </Button>
                         </div>
 
-                        {/* Usage Counter */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
-                            <div className="glass-panel p-6 rounded-3xl border-white/10">
-                                <p className="text-[9px] font-black text-gray-500 uppercase mb-2">Anúncios no Mês</p>
-                                <p className="text-2xl font-black text-white">{userPostsThisMonth.length} / 4</p>
-                                <div className="w-full bg-white/5 h-1.5 rounded-full mt-3">
-                                    <div className="bg-orange-600 h-full rounded-full" style={{width: `${(userPostsThisMonth.length / 4) * 100}%`}} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* AI Assistant */}
+                        {/* IA ASSISTENTE */}
                         <div className="glass-panel rounded-[35px] p-8 border-orange-600/20 mb-12 shadow-3xl bg-orange-600/[0.02]">
                              <div className="flex items-center gap-4 mb-6">
                                 <div className="w-10 h-10 bg-orange-600/20 rounded-xl flex items-center justify-center text-orange-500"><Mic size={20}/></div>
-                                <h3 className="text-xl font-black uppercase text-white tracking-tighter">Locutor Virtual IA</h3>
+                                <h3 className="text-xl font-black uppercase text-white tracking-tighter">Gerador de Copy com IA</h3>
                              </div>
                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 <div className="lg:col-span-2">
-                                    <textarea value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="Descreva sua promoção aqui e a IA criará o texto de rádio para você..." className="w-full bg-brand-dark border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 min-h-[100px] text-sm" />
+                                    <textarea value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="O que você quer vender? Digite aqui e a IA fará o resto..." className="w-full bg-brand-dark border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 min-h-[100px] text-sm" />
                                 </div>
                                 <div className="space-y-3">
-                                    <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="w-full bg-brand-dark border border-white/10 p-5 rounded-xl text-white uppercase font-black text-[10px]">
-                                        {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                    </select>
                                     <Button className="w-full h-14 uppercase font-black text-[10px]" onClick={async () => {
                                         setIsGeneratingAi(true);
                                         try {
                                           const res = await generateAdCopy(selectedCategory, magicPrompt, 'short');
-                                          const data = typeof res === 'object' ? res : { title: 'Oferta Especial', content: res };
+                                          const data = typeof res === 'object' ? res : { title: 'Promoção VIP', content: res };
                                           setEditingPost({ title: data.title, content: data.content, category: selectedCategory, imageUrls: [] });
                                         } finally { setIsGeneratingAi(false); }
                                     }} isLoading={isGeneratingAi}><Zap size={16}/> Gerar Texto VIP</Button>
@@ -336,17 +309,18 @@ export const App: React.FC = () => {
                              </div>
                         </div>
 
-                        {/* List My Ads */}
-                        <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios Ativos</h3>
-                        {userPostsThisMonth.length === 0 ? (
-                            <div className="text-center py-16 bg-white/[0.02] rounded-[30px] border border-dashed border-white/10 opacity-30 font-black uppercase text-[10px] tracking-widest">Ainda não há anúncios ativos.</div>
+                        <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios</h3>
+                        {userPosts.length === 0 ? (
+                            <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10 opacity-30">
+                                <p className="font-black uppercase text-[10px] tracking-widest">Você ainda não tem anúncios ativos.</p>
+                            </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                {userPostsThisMonth.map(p => (
+                                {userPosts.map(p => (
                                     <div key={p.id} className="relative group">
                                         <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                             <button onClick={() => setEditingPost(p)} className="p-3 bg-orange-600 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
-                                            <button onClick={async () => { if(confirm('Excluir anúncio?')) { await db.deletePost(p.id); refreshData(); } }} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
+                                            <button onClick={async () => { if(confirm('Excluir permanentemente?')) { await db.deletePost(p.id); refreshData(); showToast("Excluído"); } }} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
                                         </div>
                                         <PostCard post={p} />
                                     </div>
@@ -356,12 +330,15 @@ export const App: React.FC = () => {
                    </div>
                 )}
 
+                {/* PAINEL ADMINISTRATIVO COMPLETO */}
                 {currentView === 'ADMIN' && currentUser?.role === UserRole.ADMIN && (
                     <div className="flex flex-col md:flex-row min-h-screen pt-20">
                         <aside className="w-full md:w-80 border-r border-white/5 p-8 space-y-3">
-                            <h3 className="text-[9px] font-black uppercase text-orange-500 tracking-[0.4em] mb-10 pl-2">Configurações Gerais</h3>
+                            <h3 className="text-[9px] font-black uppercase text-orange-500 tracking-[0.4em] mb-10 pl-2">Administração</h3>
                             {[
-                                { id: 'INICIO', label: 'Dashboard', icon: LayoutDashboard },
+                                { id: 'INICIO', label: 'Resumo Geral', icon: LayoutDashboard },
+                                { id: 'ANUNCIOS', label: 'Anúncios', icon: Layers },
+                                { id: 'PLANOS', label: 'Planos', icon: CreditCard },
                                 { id: 'CLIENTES', label: 'Clientes', icon: Users },
                                 { id: 'AJUSTES', label: 'Identidade Site', icon: Settings },
                             ].map(item => (
@@ -371,42 +348,150 @@ export const App: React.FC = () => {
                                 </button>
                             ))}
                         </aside>
+                        
                         <main className="flex-1 p-8 lg:p-12">
+                            {/* 1. Resumo Geral */}
                             {adminSubView === 'INICIO' && (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="glass-panel p-8 rounded-[30px] text-center">
-                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Assinantes</p>
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Total Assinantes</p>
                                         <h4 className="text-5xl font-black text-orange-500">{allUsers.length}</h4>
                                     </div>
-                                    <div className="glass-panel p-8 rounded-[30px] text-center">
-                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Classificados</p>
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Total Anúncios</p>
                                         <h4 className="text-5xl font-black text-white">{posts.length}</h4>
+                                    </div>
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Planos Cadastrados</p>
+                                        <h4 className="text-5xl font-black text-white">{plans.length}</h4>
                                     </div>
                                 </div>
                             )}
+
+                            {/* 2. Gestão de Anúncios */}
+                            {adminSubView === 'ANUNCIOS' && (
+                                <div className="space-y-8">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Controle de Anúncios</h3>
+                                        <Button onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}><PlusCircle size={18}/> Novo Anúncio</Button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {posts.map(p => (
+                                            <div key={p.id} className="relative group">
+                                                <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <button onClick={() => setEditingPost(p)} className="p-2 bg-orange-600 rounded-lg text-white"><Edit size={14}/></button>
+                                                    <button onClick={async () => { if(confirm('Remover este anúncio do portal?')) { await db.deletePost(p.id); refreshData(); showToast("Removido"); } }} className="p-2 bg-red-600 rounded-lg text-white"><Trash2 size={14}/></button>
+                                                </div>
+                                                <PostCard post={p} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 3. Gestão de Planos */}
+                            {adminSubView === 'PLANOS' && (
+                                <div className="space-y-8">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Gestão de Planos</h3>
+                                        <Button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })}><PlusCircle size={18}/> Novo Plano</Button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {plans.map(pl => (
+                                            <div key={pl.id} className="glass-panel p-6 rounded-2xl flex justify-between items-center border-white/5">
+                                                <div>
+                                                    <h4 className="text-lg font-black text-white uppercase">{pl.name}</h4>
+                                                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">R$ {pl.price.toFixed(2)} | {pl.durationDays} Dias</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => setEditingPlan(pl)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-orange-600 transition-all"><Edit size={16}/></button>
+                                                    <button onClick={async () => { if(confirm('Excluir este plano?')) { await db.deletePlan(pl.id); refreshData(); } }} className="p-3 bg-white/5 rounded-xl text-red-500 hover:bg-red-600 hover:text-white transition-all"><Trash2 size={16}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 4. Gestão de Clientes */}
+                            {adminSubView === 'CLIENTES' && (
+                                <div className="space-y-8">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Clientes Cadastrados</h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="border-b border-white/5 text-[9px] font-black uppercase text-gray-500 tracking-widest">
+                                                    <th className="p-4">Assinante</th>
+                                                    <th className="p-4">WhatsApp</th>
+                                                    <th className="p-4">Status</th>
+                                                    <th className="p-4 text-right">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-[10px] font-bold text-gray-300">
+                                                {allUsers.map(u => (
+                                                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                                        <td className="p-4">
+                                                            <div className="font-black text-white uppercase">{u.name}</div>
+                                                            <div className="lowercase text-gray-500 text-[8px]">{u.email}</div>
+                                                        </td>
+                                                        <td className="p-4">{u.phone}</td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${u.status === 'BLOCKED' ? 'bg-red-600/10 text-red-500' : 'bg-green-600/10 text-green-500'}`}>
+                                                                {u.status === 'BLOCKED' ? 'Bloqueado' : 'Ativo'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 flex justify-end gap-2">
+                                                            <button onClick={() => setEditingUser(u)} className="p-2 bg-white/5 rounded-lg text-white hover:bg-orange-600"><Edit size={14}/></button>
+                                                            <button onClick={async () => { 
+                                                                const newStatus = u.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
+                                                                if(confirm(`${u.status === 'BLOCKED' ? 'Desbloquear' : 'Bloquear'} este cliente?`)) { 
+                                                                    await db.updateUser({...u, status: newStatus}); 
+                                                                    refreshData(); 
+                                                                } 
+                                                            }} className={`p-2 bg-white/5 rounded-lg transition-all ${u.status === 'BLOCKED' ? 'text-green-500 hover:bg-green-600 hover:text-white' : 'text-red-500 hover:bg-red-600 hover:text-white'}`}>
+                                                                <Ban size={14}/>
+                                                            </button>
+                                                            <button onClick={async () => { if(confirm('Excluir este cliente definitivamente?')) { await db.deleteUser(u.id); refreshData(); } }} className="p-2 bg-white/5 rounded-lg text-white hover:bg-red-600"><Trash2 size={14}/></button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 5. Identidade do Site */}
                             {adminSubView === 'AJUSTES' && (
                                 <div className="max-w-4xl space-y-10">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Identidade do Site (Imagens Paisagem)</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="space-y-4">
-                                            <label className="text-[9px] font-black uppercase text-gray-500">Logo Portal</label>
-                                            <div onClick={() => document.getElementById('upLogoT')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden">
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Logo do Topo</label>
+                                            <div onClick={() => document.getElementById('upLogoT')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={24} className="text-gray-600" />}
                                                 <input id="upLogoT" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, headerLogoUrl: arr[0]}), false)} />
+                                                {siteConfig.headerLogoUrl && <button onClick={(e) => { e.stopPropagation(); if(confirm('Remover logo?')){setSiteConfig({...siteConfig, headerLogoUrl: ''});}}} className="absolute top-2 right-2 p-1 bg-red-600 rounded-md text-white"><X size={12}/></button>}
                                             </div>
                                         </div>
                                         <div className="space-y-4">
                                             <label className="text-[9px] font-black uppercase text-gray-500">Banner Principal</label>
-                                            <div onClick={() => document.getElementById('upBanner')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden">
+                                            <div onClick={() => document.getElementById('upBanner')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
                                                 <input id="upBanner" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, heroImageUrl: arr[0]}), false)} />
+                                                {siteConfig.heroImageUrl && <button onClick={(e) => { e.stopPropagation(); if(confirm('Remover banner?')){setSiteConfig({...siteConfig, heroImageUrl: ''});}}} className="absolute top-2 right-2 p-1 bg-red-600 rounded-md text-white"><X size={12}/></button>}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Foto Rodapé</label>
+                                            <div onClick={() => document.getElementById('upFooter')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
+                                                {siteConfig.bannerFooterUrl ? <img src={siteConfig.bannerFooterUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
+                                                <input id="upFooter" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, bannerFooterUrl: arr[0]}), false)} />
+                                                {siteConfig.bannerFooterUrl && <button onClick={(e) => { e.stopPropagation(); if(confirm('Remover imagem rodapé?')){setSiteConfig({...siteConfig, bannerFooterUrl: ''});}}} className="absolute top-2 right-2 p-1 bg-red-600 rounded-md text-white"><X size={12}/></button>}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <input value={siteConfig.instagram} onChange={e => setSiteConfig({...siteConfig, instagram: e.target.value})} placeholder="INSTAGRAM" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none focus:border-orange-500" />
-                                        <input value={siteConfig.facebook} onChange={e => setSiteConfig({...siteConfig, facebook: e.target.value})} placeholder="FACEBOOK" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none focus:border-orange-500" />
-                                    </div>
-                                    <Button onClick={async () => { await db.updateConfig(siteConfig); showToast("Configurações Salvas"); refreshData(); }} className="w-full h-14 rounded-2xl"><Save size={18}/> Atualizar Identidade</Button>
+                                    <Button onClick={async () => { await db.updateConfig(siteConfig); showToast("Configurações Salvas"); refreshData(); }} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Tudo</Button>
                                 </div>
                             )}
                         </main>
@@ -414,87 +499,120 @@ export const App: React.FC = () => {
                 )}
             </main>
 
-            {/* Modal Edit/Create Post */}
+            {/* MODAIS DE EDIÇÃO */}
+            {editingPlan && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault(); setIsSaving(true);
+                        try { await db.savePlan(editingPlan); refreshData(); setEditingPlan(null); showToast("Plano Salvo!"); } finally { setIsSaving(false); }
+                    }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white text-center">Cadastrar Plano</h3>
+                        <input value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} placeholder="NOME DO PLANO" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <div className="grid grid-cols-2 gap-4">
+                            <input value={editingPlan.price} type="number" step="0.01" onChange={e => setEditingPlan({...editingPlan, price: parseFloat(e.target.value)})} placeholder="VALOR R$" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                            <input value={editingPlan.durationDays} type="number" onChange={e => setEditingPlan({...editingPlan, durationDays: parseInt(e.target.value)})} placeholder="PRAZO (DIAS)" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        </div>
+                        <div className="flex gap-4">
+                            <Button type="submit" className="flex-1" isLoading={isSaving}>Salvar</Button>
+                            <button type="button" onClick={() => setEditingPlan(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {editingUser && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault(); setIsSaving(true);
+                        try { await db.updateUser(editingUser as User); refreshData(); setEditingUser(null); showToast("Cliente Atualizado!"); } finally { setIsSaving(false); }
+                    }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white text-center">Editar Cliente</h3>
+                        <input value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} placeholder="NOME" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <input value={editingUser.phone} onChange={e => setEditingUser({...editingUser, phone: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <div className="flex gap-4">
+                            <Button type="submit" className="flex-1" isLoading={isSaving}>Atualizar</Button>
+                            <button type="button" onClick={() => setEditingUser(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
             {editingPost && (
                 <div className="fixed inset-0 z-[500] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300 overflow-y-auto">
                     <form onSubmit={async (e) => {
                         e.preventDefault(); setIsSaving(true);
                         try {
                             const expiresAt = new Date();
-                            expiresAt.setDate(expiresAt.getDate() + 7); // Anúncio dura 1 semana por padrão
+                            expiresAt.setDate(expiresAt.getDate() + 7); 
                             await db.savePost({ 
                                 ...editingPost, 
-                                authorId: currentUser?.id, 
-                                authorName: currentUser?.name, 
-                                whatsapp: currentUser?.phone, 
-                                phone: currentUser?.phone,
-                                expiresAt: expiresAt.toISOString(),
+                                authorId: editingPost.authorId || currentUser?.id, 
+                                authorName: editingPost.authorName || currentUser?.name, 
+                                whatsapp: editingPost.whatsapp || currentUser?.phone, 
+                                phone: editingPost.phone || currentUser?.phone,
+                                expiresAt: editingPost.expiresAt || expiresAt.toISOString(),
                                 createdAt: editingPost.createdAt || new Date().toISOString()
                             });
-                            refreshData(); setEditingPost(null);
-                            showToast("Anúncio Publicado!");
+                            refreshData(); setEditingPost(null); showToast("Sucesso!");
                         } finally { setIsSaving(false); }
                     }} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
-                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter text-center">Criar Meu Anúncio VIP</h3>
+                        <h3 className="text-2xl font-black uppercase text-white text-center">Anúncio VIP</h3>
                         <div className="space-y-4">
-                            <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} placeholder="TÍTULO CHAMATIVO" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" required />
-                            <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="O QUE VOCÊ ESTÁ OFERECENDO?" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm" required />
-                            
+                            <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} placeholder="TÍTULO" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" required />
+                            <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="DESCRIÇÃO" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm" required />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="bg-brand-dark border border-white/10 p-5 rounded-2xl text-white uppercase font-black text-[10px]">
                                     {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                 </select>
                                 <div className="space-y-2">
-                                    <button type="button" onClick={() => document.getElementById('adUpV7')?.click()} className="w-full p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl text-white font-black text-[10px] uppercase hover:bg-white/10 flex items-center justify-center gap-3">
-                                        <ImageIcon size={18}/> {editingPost.imageUrls?.length ? `${editingPost.imageUrls.length} Fotos Adicionadas` : 'Enviar Fotos (Máx 5)'}
+                                    <button type="button" onClick={() => document.getElementById('adUpImg')?.click()} className="w-full p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl text-white font-black text-[10px] uppercase flex items-center justify-center gap-3">
+                                        <ImageIcon size={18}/> {editingPost.imageUrls?.length ? 'Fotos Enviadas' : 'Enviar Fotos'}
                                     </button>
-                                    <input id="adUpV7" type="file" multiple className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, imageUrls: arr}))} />
+                                    <input id="adUpImg" type="file" multiple className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, imageUrls: arr}))} />
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1 h-14 rounded-2xl" isLoading={isSaving}>Lançar Anúncio</Button>
-                            <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500 hover:text-white transition-colors">Fechar</button>
+                            <Button type="submit" className="flex-1 h-14 rounded-2xl" isLoading={isSaving}>Publicar</Button>
+                            <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500">Fechar</button>
                         </div>
                     </form>
                 </div>
             )}
 
-            {/* Redesigned Footer */}
             <footer className="bg-brand-panel/60 border-t border-white/5 pt-16 pb-10 mt-auto">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
                         <div className="space-y-6">
                             <div className="flex items-center gap-3">
-                                <Radio className="text-orange-600" size={32} />
+                                {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="h-10 w-auto" /> : <Radio className="text-orange-600" size={32} />}
                                 <span className="text-xl font-black text-white uppercase tracking-tighter">Hélio Júnior</span>
                             </div>
-                            <p className="text-xs text-gray-500 leading-relaxed uppercase font-bold tracking-widest">Publicidade digital com credibilidade e o impacto do rádio que você conhece.</p>
+                            <p className="text-xs text-gray-500 leading-relaxed uppercase font-bold tracking-widest">Publicidade digital com o impacto do rádio que você conhece.</p>
                         </div>
                         <div className="space-y-6">
                             <h4 className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Navegação</h4>
                             <ul className="space-y-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                                <li><button onClick={() => setCurrentView('HOME')} className="hover:text-orange-500 transition-colors">Página Inicial</button></li>
-                                <li><button onClick={() => setCurrentView('REGISTER')} className="hover:text-orange-500 transition-colors">Ver Planos</button></li>
-                                <li><button onClick={() => setCurrentView('LOGIN')} className="hover:text-orange-500 transition-colors">Login Membro</button></li>
+                                <li><button onClick={() => setCurrentView('HOME')} className="hover:text-orange-500">Início</button></li>
+                                <li><button onClick={() => setCurrentView('REGISTER')} className="hover:text-orange-500">Anunciar</button></li>
+                                <li><button onClick={() => setCurrentView('LOGIN')} className="hover:text-orange-500">Área VIP</button></li>
                             </ul>
                         </div>
                         <div className="space-y-6">
                             <h4 className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Atendimento</h4>
                             <ul className="space-y-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                 <li className="flex items-center gap-3"><Phone size={14} className="text-orange-500"/> {siteConfig.phone}</li>
-                                <li className="flex items-center gap-3 text-green-500 cursor-pointer" onClick={() => window.open(`https://wa.me/${siteConfig.whatsapp}`, '_blank')}><Send size={14}/> Falar no WhatsApp</li>
+                                <li className="flex items-center gap-3 text-green-500 cursor-pointer" onClick={() => window.open(`https://wa.me/${siteConfig.whatsapp}`, '_blank')}><Send size={14}/> WhatsApp</li>
                             </ul>
                         </div>
                         <div className="space-y-6">
-                            <h4 className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Social</h4>
-                            <div className="flex gap-4">
-                                <button onClick={() => window.open(`https://instagram.com/${siteConfig.instagram?.replace('@','')}`)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-orange-600 hover:text-white transition-all"><Instagram size={20}/></button>
-                                <button onClick={() => window.open(`https://facebook.com/${siteConfig.facebook}`)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-orange-600 hover:text-white transition-all"><Facebook size={20}/></button>
+                            <h4 className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Galeria Rodapé</h4>
+                            <div className="aspect-video rounded-2xl overflow-hidden border border-white/10 bg-white/5">
+                                <img src={siteConfig.bannerFooterUrl} className="w-full h-full object-cover" />
                             </div>
                         </div>
                     </div>
-                    <div className="border-t border-white/5 pt-8 text-[9px] font-black uppercase text-gray-600 tracking-[0.3em] flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="border-t border-white/5 pt-8 text-[9px] font-black uppercase text-gray-600 tracking-[0.3em] flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
                         <p>&copy; 2024 HÉLIO JÚNIOR - VOZ QUE VENDE. TODOS OS DIREITOS RESERVADOS.</p>
                         <p className="flex items-center gap-2">PLATAFORMA DIGITAL <Zap size={10} className="text-orange-500"/></p>
                     </div>

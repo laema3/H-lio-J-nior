@@ -42,7 +42,6 @@ const toDb = (obj: any) => {
 
 export const db = {
   async init() {
-    // Garante que exista um admin no LocalStorage caso o Supabase falhe
     const users = getLocal(STORAGE_KEYS.USERS, []);
     if (!users.find((u: any) => u.email === 'admin@helio.com')) {
       const admin: User = {
@@ -52,7 +51,8 @@ export const db = {
         password: 'admin',
         role: UserRole.ADMIN,
         paymentStatus: PaymentStatus.NOT_APPLICABLE,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        status: 'ACTIVE'
       };
       saveLocal(STORAGE_KEYS.USERS, [...users, admin]);
     }
@@ -75,7 +75,12 @@ export const db = {
         heroTitle: data.herotitle,
         heroSubtitle: data.herosubtitle,
         heroImageUrl: data.heroimageurl,
+        headerLogoUrl: data.headerlogourl,
+        bannerFooterUrl: data.bannerfooterurl,
         whatsapp: data.whatsapp,
+        phone: data.phone,
+        instagram: data.instagram,
+        facebook: data.facebook,
         pixKey: data.pixkey,
         pixName: data.pixname
       };
@@ -84,7 +89,9 @@ export const db = {
 
   async updateConfig(cfg: SiteConfig) {
     saveLocal(STORAGE_KEYS.CONFIG, cfg);
-    await supabase.from('site_config').upsert({ id: 1, ...toDb(cfg) });
+    try {
+      await supabase.from('site_config').upsert({ id: 1, ...toDb(cfg) });
+    } catch(e) {}
   },
 
   async getPlans(): Promise<Plan[]> {
@@ -124,7 +131,8 @@ export const db = {
         id: String(u.id),
         planId: u.planid,
         paymentStatus: u.paymentstatus as PaymentStatus,
-        role: u.role as UserRole
+        role: u.role as UserRole,
+        status: u.status || 'ACTIVE'
       }));
     } catch { return getLocal(STORAGE_KEYS.USERS, []); }
   },
@@ -132,18 +140,22 @@ export const db = {
   async authenticate(email: string, pass: string): Promise<User | null> {
     const localUsers = getLocal(STORAGE_KEYS.USERS, []);
     const foundLocal = localUsers.find((u: any) => u.email.toLowerCase() === email.toLowerCase() && u.password === pass);
-    if (foundLocal) return foundLocal;
+    if (foundLocal) {
+        if (foundLocal.status === 'BLOCKED') return null;
+        return foundLocal;
+    }
 
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).eq('password', pass).maybeSingle();
       if (error || !data) return null;
+      if (data.status === 'BLOCKED') return null;
       return { ...data, id: String(data.id), planId: data.planid, paymentStatus: data.paymentstatus as PaymentStatus, role: data.role as UserRole };
     } catch { return null; }
   },
 
   async addUser(user: Partial<User>) {
     const users = await this.getUsers();
-    const newUser = { ...user, id: user.id || 'u-' + Date.now(), createdAt: new Date().toISOString() } as User;
+    const newUser = { ...user, id: user.id || 'u-' + Date.now(), createdAt: new Date().toISOString(), status: 'ACTIVE' } as User;
     saveLocal(STORAGE_KEYS.USERS, [...users, newUser]);
     try { await supabase.from('profiles').insert(toDb(newUser)); } catch(e) {}
     return newUser;
@@ -195,8 +207,9 @@ export const db = {
         id: String(p.id),
         authorId: String(p.authorid),
         authorName: p.authorname,
-        imageUrl: p.imageurl,
-        createdAt: p.createdat
+        imageUrls: p.imageurls,
+        createdAt: p.createdat,
+        expiresAt: p.expiresat
       }));
     } catch { return getLocal(STORAGE_KEYS.POSTS, []); }
   },

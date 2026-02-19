@@ -31,6 +31,7 @@ export interface SiteConfig {
   heroLabel: string;
   headerLogoUrl?: string;
   footerLogoUrl?: string;
+  bannerFooterUrl?: string;
   pixKey?: string;
   pixName?: string;
   whatsapp?: string;
@@ -52,6 +53,7 @@ export interface User {
   expiresAt?: string; 
   createdAt: string;
   usedFreeTrial?: boolean;
+  status?: 'ACTIVE' | 'BLOCKED';
 }
 
 export interface Post {
@@ -63,11 +65,11 @@ export interface Post {
   content: string;
   whatsapp?: string;
   phone?: string;
-  imageUrls?: string[]; // Array de até 5 imagens
+  imageUrls?: string[]; 
   logoUrl?: string; 
   audioData?: string;
   createdAt: string;
-  expiresAt?: string; // Data final do anúncio
+  expiresAt?: string; 
 }
 
 export type ViewState = 'HOME' | 'LOGIN' | 'REGISTER' | 'DASHBOARD' | 'ADMIN' | 'PAYMENT';
