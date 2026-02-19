@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, Type } from "@google/genai";
 
 /**
  * Helper para inicializar o cliente e validar a chave
@@ -23,13 +22,29 @@ export const generateAdCopy = async (profession: string, keywords: string, type:
     if (type === 'short') {
       const prompt = `Crie um anúncio de impacto para um portal de classificados para rádio e web. 
       Profissão/Ramo: ${profession}. 
-      Contexto: ${keywords}. 
-      Retorne APENAS um JSON no formato: {"title": "Título chamativo", "content": "Descrição persuasiva de até 60 palavras"}`;
+      Contexto: ${keywords}.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: "application/json" }
+        config: { 
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: {
+                type: Type.STRING,
+                description: "Um título chamativo e curto para o anúncio.",
+              },
+              content: {
+                type: Type.STRING,
+                description: "Uma descrição persuasiva de até 60 palavras.",
+              }
+            },
+            required: ["title", "content"],
+            propertyOrdering: ["title", "content"]
+          }
+        }
       });
       
       try {
@@ -82,7 +97,8 @@ export const generateAdImage = async (prompt: string): Promise<string | undefine
 };
 
 /**
- * Gera áudio (TTS) a partir do texto do anúncio
+ * Gera áudio (TTS) a partir do texto do anúncio. 
+ * O retorno é raw PCM em base64 (sem cabeçalho WAV/MP3).
  */
 export const generateAudioTTS = async (text: string): Promise<string | undefined> => {
   try {

@@ -21,9 +21,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
         setCurrentView(target);
         setIsMenuOpen(false);
       }}
-      className={`px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 ${
+      className={`px-5 py-2 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all duration-300 ${
         active 
-          ? 'bg-brand-primary text-white shadow-xl shadow-brand-primary/30 scale-105' 
+          ? 'bg-orange-600 text-white shadow-xl shadow-orange-600/20 scale-105' 
           : 'text-gray-400 hover:text-white hover:bg-white/5'
       }`}
     >
@@ -40,65 +40,65 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
             className="flex items-center gap-6 cursor-pointer group" 
             onClick={() => {setCurrentView('HOME'); window.scrollTo(0,0);}}
           >
-            <div className="h-12 min-w-[120px] flex items-center justify-center transition-all duration-500 overflow-hidden relative">
+            <div className="h-10 flex items-center transition-all duration-500 overflow-hidden relative">
               {config.headerLogoUrl ? (
                 <img src={config.headerLogoUrl} className="h-full w-auto object-contain group-hover:scale-110 transition-transform" alt="Logo VIP" />
               ) : (
-                <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-2xl border border-white/10 group-hover:border-brand-primary transition-colors">
-                    <Radio className="text-brand-primary w-5 h-5 animate-pulse" />
-                    <span className="text-[11px] font-black text-white uppercase tracking-tighter">{config.heroLabel}</span>
+                <div className="flex items-center gap-3 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 group-hover:border-orange-600 transition-colors">
+                    <Radio className="text-orange-600 w-5 h-5 animate-pulse" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-tighter">Hélio Júnior</span>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-3">
             {navItem('Início', 'HOME', currentView === 'HOME')}
             {!currentUser && (
               <>
                 {navItem('Entrar', 'LOGIN', currentView === 'LOGIN')}
                 <button
                     onClick={() => setCurrentView('REGISTER')}
-                    className="ml-4 px-8 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-[20px] text-[10px] font-black uppercase tracking-[0.2em] hover:shadow-2xl hover:shadow-orange-500/40 transition-all transform hover:-translate-y-1 active:scale-95"
+                    className="ml-4 px-8 py-2.5 bg-orange-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-700 hover:shadow-xl hover:shadow-orange-600/20 transition-all transform hover:-translate-y-0.5 active:scale-95"
                 >
                     Anunciar Agora
                 </button>
               </>
             )}
             {currentUser && (
-              <div className="flex items-center gap-6 ml-6 pl-6 border-l border-white/10">
+              <div className="flex items-center gap-4 ml-4 pl-4 border-l border-white/10">
                 <div className="text-right hidden sm:block">
-                    <p className="text-xs font-black text-white uppercase tracking-tighter flex items-center justify-end gap-2">
+                    <p className="text-[10px] font-black text-white uppercase tracking-tighter flex items-center justify-end gap-2">
                       {currentUser.name}
-                      {currentUser.role === UserRole.ADMIN && <Shield size={12} className="text-brand-gold"/>}
+                      {currentUser.role === UserRole.ADMIN && <Shield size={10} className="text-orange-500"/>}
                     </p>
-                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Membro VIP'}</p>
+                    <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Painel VIP'}</p>
                 </div>
-                {currentUser.role === UserRole.ADVERTISER && navItem('Dashboard', 'DASHBOARD', currentView === 'DASHBOARD')}
-                {currentUser.role === UserRole.ADMIN && navItem('Admin', 'ADMIN', currentView === 'ADMIN')}
-                <button onClick={onLogout} className="p-3 bg-white/5 rounded-2xl text-gray-400 hover:text-red-400 hover:bg-red-400/10 transition-all active:scale-90"><LogOut size={20} /></button>
+                {currentUser.role === UserRole.ADVERTISER && navItem('Minha Conta', 'DASHBOARD', currentView === 'DASHBOARD')}
+                {currentUser.role === UserRole.ADMIN && navItem('Gestão', 'ADMIN', currentView === 'ADMIN')}
+                <button onClick={onLogout} className="p-2.5 bg-white/5 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-400/10 transition-all active:scale-90"><LogOut size={16} /></button>
               </div>
             )}
           </div>
 
-          <div className="md:hidden flex items-center gap-4">
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-gray-300 hover:text-white p-3 bg-white/5 rounded-2xl">{isMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
+          <div className="md:hidden flex items-center gap-3">
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-gray-300 hover:text-white p-2.5 bg-white/5 rounded-xl">{isMenuOpen ? <X size={20} /> : <Menu size={20} />}</button>
           </div>
         </div>
       </div>
       
       {isMenuOpen && (
-        <div className="md:hidden absolute top-20 left-0 right-0 bg-brand-dark/95 backdrop-blur-3xl border-b border-white/10 p-6 flex flex-col gap-4 animate-in slide-in-from-top">
-            <button onClick={() => {setCurrentView('HOME'); setIsMenuOpen(false);}} className="p-5 text-left text-[11px] font-black uppercase text-white border-b border-white/5 tracking-widest">Início</button>
+        <div className="md:hidden absolute top-20 left-0 right-0 bg-brand-dark/98 backdrop-blur-3xl border-b border-white/10 p-6 flex flex-col gap-2 animate-in slide-in-from-top duration-300">
+            <button onClick={() => {setCurrentView('HOME'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest hover:bg-white/5 rounded-xl transition-all">Página Inicial</button>
             {!currentUser ? (
                 <>
-                    <button onClick={() => {setCurrentView('LOGIN'); setIsMenuOpen(false);}} className="p-5 text-left text-[11px] font-black uppercase text-white border-b border-white/5 tracking-widest">Entrar</button>
-                    <button onClick={() => {setCurrentView('REGISTER'); setIsMenuOpen(false);}} className="p-5 text-center bg-orange-600 rounded-2xl text-[11px] font-black uppercase text-white tracking-widest shadow-xl">Anunciar Agora</button>
+                    <button onClick={() => {setCurrentView('LOGIN'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest hover:bg-white/5 rounded-xl transition-all">Entrar</button>
+                    <button onClick={() => {setCurrentView('REGISTER'); setIsMenuOpen(false);}} className="mt-2 p-5 text-center bg-orange-600 rounded-2xl text-[10px] font-black uppercase text-white tracking-widest shadow-xl">Cadastrar Grátis</button>
                 </>
             ) : (
                 <>
-                    <button onClick={() => {setCurrentView(currentUser.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD'); setIsMenuOpen(false);}} className="p-5 text-left text-[11px] font-black uppercase text-white border-b border-white/5 tracking-widest">Meu Painel</button>
-                    <button onClick={() => {onLogout(); setIsMenuOpen(false);}} className="p-5 text-left text-[11px] font-black uppercase text-red-400 tracking-widest">Sair</button>
+                    <button onClick={() => {setCurrentView(currentUser.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest">Painel de Controle</button>
+                    <button onClick={() => {onLogout(); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-red-400 tracking-widest">Sair da Conta</button>
                 </>
             )}
         </div>
