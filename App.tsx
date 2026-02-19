@@ -7,7 +7,7 @@ import { Button } from './components/Button';
 import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { 
-    Trash2, Edit, Users, Check, X, AlertTriangle, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Lock, Unlock, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield
+    Trash2, Edit, Users, Check, X, AlertTriangle, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Lock, Unlock, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2
 } from 'lucide-react';
 
 const SESSION_KEY = 'helio_junior_vip_session';
@@ -17,8 +17,12 @@ const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
     const [adminSubView, setAdminSubView] = useState<string>('INICIO');
     const [currentUser, setCurrentUser] = useState<User | null>(() => {
-        const saved = localStorage.getItem(SESSION_KEY);
-        return saved ? JSON.parse(saved) : null;
+        try {
+            const saved = localStorage.getItem(SESSION_KEY);
+            return saved ? JSON.parse(saved) : null;
+        } catch {
+            return null;
+        }
     });
 
     // Estados de dados sincronizados com DB
@@ -96,10 +100,10 @@ const App: React.FC = () => {
             if (p) setPosts(p);
             if (u) setAllUsers(u);
             if (pl) setPlans(pl);
-            if (cfg) setSiteConfig(cfg);
+            if (cfg && cfg.heroTitle) setSiteConfig(cfg);
             if (cats) setCategories(cats);
             
-            // Sincroniza usuário logado (ex: aprovação de pagamento)
+            // Sincroniza usuário logado
             if (currentUser) {
                 const fresh = u.find((usr: User) => usr.email === currentUser.email);
                 if (fresh) {
@@ -108,7 +112,8 @@ const App: React.FC = () => {
                 }
             }
         } catch (err) {
-            console.error("Falha ao sincronizar:", err);
+            console.error("Falha ao sincronizar dados:", err);
+            showToast("Erro ao conectar com o servidor", "error");
         } finally {
             setIsLoadingData(false);
         }
@@ -146,6 +151,19 @@ const App: React.FC = () => {
             setIsLoggingIn(false);
         }
     };
+
+    // Tela de carregamento inicial para evitar tela preta
+    if (isLoadingData && posts.length === 0) {
+        return (
+            <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center gap-6">
+                <Loader2 className="w-16 h-16 text-brand-primary animate-spin" />
+                <div className="text-center">
+                    <h2 className="text-2xl font-black uppercase text-white tracking-widest">Hélio Júnior</h2>
+                    <p className="text-gray-500 text-xs font-bold uppercase mt-2">Carregando Portal VIP...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-brand-dark text-gray-100 flex flex-col font-sans">
@@ -408,7 +426,7 @@ const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Gestão de Planos e Categorias (CRUD Básico) */}
+                            {/* Gestão de Planos e Categorias */}
                             {(adminSubView === 'PLANOS' || adminSubView === 'CATEGORIAS') && (
                                 <div className="space-y-12 animate-in slide-in-from-right duration-500">
                                     <div className="flex justify-between items-center">
@@ -443,7 +461,7 @@ const App: React.FC = () => {
                    <div className="pt-48 pb-56 max-w-7xl mx-auto px-6">
                         <div className="flex flex-col md:flex-row justify-between items-center gap-12 mb-24 border-b border-white/5 pb-20">
                             <div className="flex items-center gap-10">
-                                <div className="w-32 h-32 bg-gradient-to-br from-brand-primary to-purple-800 rounded-[45px] flex items-center justify-center text-white font-black text-5xl shadow-2xl">{currentUser.name[0]}</div>
+                                <div className="w-32 h-32 bg-gradient-to-br from-brand-primary to-purple-800 rounded-[45px] flex items-center justify-center text-white font-black text-5xl shadow-2xl">{(currentUser.name || 'U')[0]}</div>
                                 <div className="space-y-2">
                                     <h2 className="text-5xl font-black text-white uppercase tracking-tighter leading-none">{currentUser.name}</h2>
                                     <div className="flex items-center gap-4">
@@ -457,6 +475,7 @@ const App: React.FC = () => {
                             </Button>
                         </div>
 
+                        {/* Estúdio IA */}
                         <div className="glass-panel rounded-[80px] p-16 md:p-24 border-brand-primary/20 mb-32 shadow-3xl relative overflow-hidden group">
                             <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-all duration-1000"><Mic size={400} className="text-brand-primary"/></div>
                             <div className="relative z-10 space-y-10">
@@ -503,7 +522,7 @@ const App: React.FC = () => {
                             await db.savePost({
                                 ...editingPost,
                                 authorId: currentUser?.id,
-                                authorName: currentUser?.name,
+                                authorName: currentUser?.name || 'Assinante',
                                 whatsapp: currentUser?.phone,
                                 phone: currentUser?.phone
                             });
