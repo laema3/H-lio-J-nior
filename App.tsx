@@ -13,7 +13,7 @@ import {
 const SESSION_KEY = 'helio_junior_vip_session';
 
 const App: React.FC = () => {
-    // Estados principais
+    // Estados principais de navegação
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
     const [adminSubView, setAdminSubView] = useState<string>('INICIO');
     const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -21,7 +21,7 @@ const App: React.FC = () => {
         return saved ? JSON.parse(saved) : null;
     });
 
-    // Estados de dados
+    // Estados de dados sincronizados com DB
     const [posts, setPosts] = useState<Post[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [plans, setPlans] = useState<Plan[]>([]);
@@ -36,7 +36,7 @@ const App: React.FC = () => {
         whatsapp: ''
     });
 
-    // Estados de UI
+    // Estados de UI e Feedback
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -44,7 +44,7 @@ const App: React.FC = () => {
     const [isGeneratingAi, setIsGeneratingAi] = useState(false);
     const [magicPrompt, setMagicPrompt] = useState('');
 
-    // Estados de Edição
+    // Estados para modais de edição
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
     const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
@@ -80,6 +80,7 @@ const App: React.FC = () => {
         });
     };
 
+    // Função centralizada para carregar dados
     const refreshData = async () => {
         setIsLoadingData(true);
         try {
@@ -98,6 +99,7 @@ const App: React.FC = () => {
             if (cfg) setSiteConfig(cfg);
             if (cats) setCategories(cats);
             
+            // Sincroniza usuário logado (ex: aprovação de pagamento)
             if (currentUser) {
                 const fresh = u.find((usr: User) => usr.email === currentUser.email);
                 if (fresh) {
@@ -106,8 +108,7 @@ const App: React.FC = () => {
                 }
             }
         } catch (err) {
-            console.error("Erro ao carregar dados:", err);
-            showToast("Erro ao sincronizar dados", "error");
+            console.error("Falha ao sincronizar:", err);
         } finally {
             setIsLoadingData(false);
         }
@@ -119,7 +120,7 @@ const App: React.FC = () => {
         localStorage.removeItem(SESSION_KEY);
         setCurrentUser(null);
         setCurrentView('HOME');
-        showToast("Sessão encerrada");
+        showToast("Você saiu da área VIP");
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
@@ -139,9 +140,7 @@ const App: React.FC = () => {
                 setCurrentUser(u);
                 localStorage.setItem(SESSION_KEY, JSON.stringify(u));
                 setCurrentView('ADMIN');
-                showToast("Acesso Administrativo Liberado");
-            } else {
-                showToast("Admin padrão não encontrado localmente.", "error");
+                showToast("Olá Hélio, Painel VIP aberto!");
             }
         } finally {
             setIsLoggingIn(false);
@@ -174,35 +173,24 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="relative animate-float">
-                                    <div className="glass-panel p-3 rounded-[60px] border-white/10 shadow-3xl rotate-1">
-                                        <img src={siteConfig.heroImageUrl} className="w-full aspect-video object-cover rounded-[50px]" alt="Portal" />
+                                    <div className="glass-panel p-3 rounded-[60px] border-white/10 shadow-3xl rotate-1 overflow-hidden">
+                                        <img src={siteConfig.heroImageUrl} className="w-full aspect-video object-cover rounded-[50px]" alt="Hero" />
                                     </div>
                                 </div>
                             </div>
                         </section>
 
-                        {/* Vitrine Section */}
+                        {/* Vitrine de Anúncios */}
                         <section id="ads" className="max-w-7xl mx-auto px-6 py-32 bg-brand-panel/30 rounded-[100px] mb-32 border border-white/5 shadow-2xl">
-                            <div className="px-10 mb-20 text-center md:text-left flex flex-col md:flex-row justify-between items-end gap-6">
-                                <div>
-                                    <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter text-white">Classificados VIP</h2>
-                                    <p className="text-gray-500 mt-2 font-bold uppercase text-[10px] tracking-[0.4em]">Anunciantes verificados e exclusivos</p>
-                                </div>
-                                <div className="flex gap-4">
-                                    <select className="bg-brand-dark border border-white/10 p-5 rounded-2xl text-[10px] font-black uppercase text-gray-400 outline-none">
-                                        <option>Todos os Ramos</option>
-                                        {categories.map(c => <option key={c.id}>{c.name}</option>)}
-                                    </select>
-                                </div>
+                            <div className="px-10 mb-20 text-center md:text-left">
+                                <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter text-white">Classificados VIP</h2>
+                                <p className="text-gray-500 mt-2 font-bold uppercase text-[10px] tracking-[0.4em]">Anunciantes verificados</p>
                             </div>
                             
                             {posts.length === 0 ? (
-                                <div className="text-center py-20 opacity-20">
-                                    <Mic size={80} className="mx-auto mb-6" />
-                                    <p className="font-black uppercase tracking-widest text-sm">Nenhum anúncio no ar hoje</p>
-                                </div>
+                                <div className="text-center py-20 opacity-30 italic">Nenhum anúncio disponível no momento.</div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 p-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
                                     {posts.map(p => <PostCard key={p.id} post={p} />)}
                                 </div>
                             )}
@@ -213,8 +201,7 @@ const App: React.FC = () => {
                 {(currentView === 'LOGIN' || currentView === 'REGISTER') && (
                     <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-b from-brand-dark to-brand-panel pt-32">
                         <div className="glass-panel p-16 md:p-24 rounded-[80px] w-full max-w-2xl text-center shadow-3xl">
-                            <h2 className="text-5xl font-black text-white uppercase mb-4 tracking-tighter">{currentView === 'LOGIN' ? 'Portal do Assinante' : 'Seja um Parceiro'}</h2>
-                            <p className="text-gray-500 mb-12 text-sm uppercase font-bold tracking-widest">Acesso exclusivo para anunciantes VIP</p>
+                            <h2 className="text-5xl font-black text-white uppercase mb-8 tracking-tighter">{currentView === 'LOGIN' ? 'Acesso VIP' : 'Nova Assinatura'}</h2>
                             
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
@@ -227,9 +214,9 @@ const App: React.FC = () => {
                                             setCurrentUser(u);
                                             localStorage.setItem(SESSION_KEY, JSON.stringify(u));
                                             setCurrentView(u.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD');
-                                            showToast(`Olá, ${u.name.split(' ')[0]}!`);
+                                            showToast(`Bem-vindo, ${u.name}`);
                                             refreshData();
-                                        } else showToast("Dados incorretos", "error");
+                                        } else showToast("E-mail ou senha incorretos", "error");
                                     } else {
                                         const newUser = { 
                                             name: fd.get('name') as string, email: fd.get('email') as string, password: fd.get('password') as string, 
@@ -242,7 +229,7 @@ const App: React.FC = () => {
                                             setCurrentUser(saved); 
                                             localStorage.setItem(SESSION_KEY, JSON.stringify(saved)); 
                                             setCurrentView('DASHBOARD'); 
-                                            showToast("Cadastro realizado!");
+                                            showToast("Cadastro concluído!");
                                             refreshData(); 
                                         }
                                     }
@@ -250,37 +237,37 @@ const App: React.FC = () => {
                             }} className="space-y-6">
                                 {currentView === 'REGISTER' && (
                                     <>
-                                        <input name="name" required placeholder="NOME OU NOME DA EMPRESA" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
-                                        <input name="phone" required placeholder="WHATSAPP (DDD + NÚMERO)" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
+                                        <input name="name" required placeholder="NOME/EMPRESA" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
+                                        <input name="phone" required placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <select name="profession" required className="bg-brand-dark border border-white/10 p-8 rounded-[40px] text-white font-black uppercase text-[10px] outline-none">
-                                                <option value="">Selecione seu Ramo</option>
+                                                <option value="">Ramo de Atuação</option>
                                                 {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                             </select>
                                             <select name="planId" required className="bg-brand-dark border border-white/10 p-8 rounded-[40px] text-white font-black uppercase text-[10px] outline-none">
-                                                <option value="">Escolha seu Plano</option>
+                                                <option value="">Plano de Assinatura</option>
                                                 {plans.map(p => <option key={p.id} value={p.id}>{p.name} - R${p.price}</option>)}
                                             </select>
                                         </div>
                                     </>
                                 )}
-                                <input name="email" required type="email" placeholder="SEU MELHOR E-MAIL" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
-                                <input name="password" required type="password" placeholder="SUA SENHA" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
+                                <input name="email" required type="email" placeholder="E-MAIL" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
+                                <input name="password" required type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary" />
                                 
                                 <Button type="submit" className="w-full h-24 text-lg font-black uppercase rounded-[45px] shadow-2xl" isLoading={isLoggingIn}>
-                                    {currentView === 'LOGIN' ? 'Entrar no Painel' : 'Finalizar Cadastro VIP'}
+                                    {currentView === 'LOGIN' ? 'Entrar Agora' : 'Finalizar Cadastro'}
                                 </Button>
                                 
-                                <div className="flex flex-col gap-6 mt-12">
+                                <div className="flex flex-col gap-8 mt-12">
                                     <button type="button" onClick={() => setCurrentView(currentView === 'LOGIN' ? 'REGISTER' : 'LOGIN')} className="text-[10px] text-gray-500 font-black uppercase hover:text-white transition-all tracking-widest">
-                                        {currentView === 'LOGIN' ? 'Não tem conta? Comece aqui' : 'Já possui cadastro? Clique aqui'}
+                                        {currentView === 'LOGIN' ? 'Não tem conta? Clique aqui' : 'Já sou Assinante'}
                                     </button>
                                     
                                     {currentView === 'LOGIN' && (
                                         <div className="pt-8 border-t border-white/5">
-                                            <button type="button" onClick={handleQuickAdminLogin} className="group flex items-center gap-3 mx-auto px-6 py-3 bg-white/5 rounded-full hover:bg-brand-primary transition-all">
+                                            <button type="button" onClick={handleQuickAdminLogin} className="flex items-center gap-3 mx-auto px-6 py-3 bg-white/5 rounded-full hover:bg-brand-primary transition-all group">
                                                 <Shield className="w-4 h-4 text-brand-primary group-hover:text-white" />
-                                                <span className="text-[9px] text-gray-400 group-hover:text-white font-black uppercase tracking-tighter">Acesso Direto Hélio</span>
+                                                <span className="text-[9px] text-gray-400 group-hover:text-white font-black uppercase">Sou o Hélio Júnior</span>
                                             </button>
                                         </div>
                                     )}
@@ -292,46 +279,38 @@ const App: React.FC = () => {
 
                 {currentView === 'ADMIN' && currentUser?.role === UserRole.ADMIN && (
                     <div className="flex flex-col md:flex-row min-h-screen pt-32 bg-brand-dark">
-                        {/* Sidebar Admin */}
                         <aside className="w-full md:w-96 border-r border-white/5 p-12 space-y-6">
-                            <div className="mb-12">
-                                <h3 className="text-xs font-black uppercase text-brand-primary tracking-[0.4em] mb-2">Administração</h3>
-                                <p className="text-2xl font-black text-white uppercase tracking-tighter leading-none">Controle Master</p>
-                            </div>
+                            <h3 className="text-[10px] font-black uppercase text-brand-primary tracking-[0.4em] mb-12">Gestão Master</h3>
                             {[
                                 { id: 'INICIO', label: 'Resumo Geral', icon: LayoutDashboard },
-                                { id: 'CLIENTES', label: 'Lista Assinantes', icon: Users },
-                                { id: 'PLANOS', label: 'Gestão de Planos', icon: CreditCard },
-                                { id: 'CATEGORIAS', label: 'Ramos de Atuação', icon: Layers },
-                                { id: 'AJUSTES', label: 'Configurações Site', icon: Settings },
+                                { id: 'CLIENTES', label: 'Assinantes', icon: Users },
+                                { id: 'PLANOS', label: 'Planos VIP', icon: CreditCard },
+                                { id: 'CATEGORIAS', label: 'Categorias', icon: Layers },
+                                { id: 'AJUSTES', label: 'Identidade Site', icon: Settings },
                             ].map(item => (
-                                <button key={item.id} onClick={() => setAdminSubView(item.id)} className={`w-full flex items-center gap-6 p-8 rounded-[35px] transition-all duration-500 group ${adminSubView === item.id ? 'bg-brand-primary text-white shadow-2xl shadow-brand-primary/30' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                                    <item.icon size={22} className={adminSubView === item.id ? 'text-white' : 'group-hover:text-brand-primary'} />
+                                <button key={item.id} onClick={() => setAdminSubView(item.id)} className={`w-full flex items-center gap-6 p-8 rounded-[35px] transition-all duration-300 ${adminSubView === item.id ? 'bg-brand-primary text-white shadow-2xl' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+                                    <item.icon size={20} />
                                     <span className="text-[11px] font-black uppercase tracking-widest">{item.label}</span>
                                 </button>
                             ))}
                         </aside>
                         
-                        {/* Conteúdo Admin */}
                         <main className="flex-1 p-12 md:p-24 overflow-y-auto">
                             {adminSubView === 'INICIO' && (
                                 <div className="space-y-16 animate-in slide-in-from-right duration-500">
-                                    <div className="flex justify-between items-end">
-                                        <h2 className="text-5xl font-black uppercase tracking-tighter text-white">Bem-vindo, Hélio</h2>
-                                        <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest">Acesso de Proprietário</p>
-                                    </div>
+                                    <h2 className="text-5xl font-black uppercase tracking-tighter text-white">Olá, Hélio Júnior</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                                        <div className="glass-panel p-12 rounded-[50px] border-white/5 text-center group hover:border-brand-primary/20 transition-all">
-                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4">Membros Ativos</p>
-                                            <h4 className="text-7xl font-black mt-2 tracking-tighter text-brand-primary">{allUsers.length - 1}</h4>
+                                        <div className="glass-panel p-12 rounded-[50px] border-white/5 text-center">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4">Total Clientes</p>
+                                            <h4 className="text-7xl font-black mt-2 text-brand-primary">{allUsers.length - 1}</h4>
                                         </div>
-                                        <div className="glass-panel p-12 rounded-[50px] border-white/5 text-center group hover:border-brand-primary/20 transition-all">
+                                        <div className="glass-panel p-12 rounded-[50px] border-white/5 text-center">
                                             <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4">Anúncios no Ar</p>
-                                            <h4 className="text-7xl font-black mt-2 tracking-tighter text-brand-gold">{posts.length}</h4>
+                                            <h4 className="text-7xl font-black mt-2 text-brand-gold">{posts.length}</h4>
                                         </div>
-                                        <div className="glass-panel p-12 rounded-[50px] border-white/5 text-center group hover:border-brand-primary/20 transition-all">
-                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4">Receita Estimada</p>
-                                            <h4 className="text-7xl font-black mt-2 tracking-tighter text-green-500">R${(allUsers.length * 49).toFixed(0)}</h4>
+                                        <div className="glass-panel p-12 rounded-[50px] border-white/5 text-center">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4">Planos Ativos</p>
+                                            <h4 className="text-7xl font-black mt-2 text-green-500">{plans.length}</h4>
                                         </div>
                                     </div>
                                 </div>
@@ -339,37 +318,36 @@ const App: React.FC = () => {
 
                             {adminSubView === 'CLIENTES' && (
                                 <div className="space-y-10 animate-in slide-in-from-right duration-500">
-                                    <h2 className="text-4xl font-black uppercase tracking-tighter text-white">Gestão de Assinantes</h2>
-                                    <div className="glass-panel rounded-[50px] overflow-hidden border-white/5 shadow-2xl">
+                                    <h2 className="text-4xl font-black uppercase tracking-tighter text-white">Controle de Assinantes</h2>
+                                    <div className="glass-panel rounded-[50px] overflow-hidden border-white/5">
                                         <table className="w-full text-left">
                                             <thead className="bg-white/5 text-[10px] font-black uppercase text-gray-500">
-                                                <tr><th className="p-10">Dados do Cliente</th><th className="p-10">Pagamento</th><th className="p-10">Ramo</th><th className="p-10">Controle</th></tr>
+                                                <tr><th className="p-10">Cliente</th><th className="p-10">Status</th><th className="p-10">Ações</th></tr>
                                             </thead>
                                             <tbody className="divide-y divide-white/5">
-                                                {allUsers.filter(u => u.email !== 'admin@helio.com').map(u => (
-                                                    <tr key={u.id} className="hover:bg-white/2 transition-colors group">
+                                                {allUsers.filter(u => u.id !== 'admin' && u.email !== 'admin@helio.com').map(u => (
+                                                    <tr key={u.id} className="hover:bg-white/2 transition-colors">
                                                         <td className="p-10">
-                                                            <div className="font-black text-white uppercase text-sm tracking-tighter">{u.name}</div>
-                                                            <div className="text-[10px] text-gray-500 lowercase font-medium">{u.email}</div>
+                                                            <div className="font-black text-white uppercase">{u.name}</div>
+                                                            <div className="text-[10px] text-gray-500 lowercase">{u.email}</div>
                                                         </td>
                                                         <td className="p-10">
-                                                            <span className={`px-5 py-2 rounded-full text-[8px] font-black uppercase border tracking-widest ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500 text-green-500 bg-green-500/5' : 'border-red-500 text-red-500 bg-red-500/5 animate-pulse'}`}>
+                                                            <span className={`px-5 py-2 rounded-full text-[8px] font-black uppercase border ${u.paymentStatus === PaymentStatus.CONFIRMED ? 'border-green-500 text-green-500 bg-green-500/5' : 'border-red-500 text-red-500 animate-pulse'}`}>
                                                                 {u.paymentStatus}
                                                             </span>
                                                         </td>
-                                                        <td className="p-10 text-[10px] font-black text-gray-400 uppercase tracking-widest">{u.profession || 'Geral'}</td>
                                                         <td className="p-10">
-                                                            <div className="flex gap-3">
+                                                            <div className="flex gap-4">
                                                                 <button onClick={() => {
-                                                                    const nextStatus = u.paymentStatus === PaymentStatus.CONFIRMED ? PaymentStatus.AWAITING : PaymentStatus.CONFIRMED;
-                                                                    triggerConfirm(nextStatus === PaymentStatus.CONFIRMED ? "Aprovar Acesso" : "Bloquear Acesso", `Alterar status de ${u.name}?`, async () => {
-                                                                        await db.updateUser({ ...u, paymentStatus: nextStatus });
+                                                                    const nextS = u.paymentStatus === PaymentStatus.CONFIRMED ? PaymentStatus.AWAITING : PaymentStatus.CONFIRMED;
+                                                                    triggerConfirm("Alterar Status", `Deseja mudar o status de ${u.name}?`, async () => {
+                                                                        await db.updateUser({...u, paymentStatus: nextS});
                                                                         refreshData();
                                                                     });
-                                                                }} className="p-5 bg-white/5 text-gray-400 rounded-2xl hover:bg-brand-primary hover:text-white transition-all shadow-lg">
+                                                                }} className="p-4 bg-white/5 text-gray-400 rounded-2xl hover:bg-brand-primary hover:text-white transition-all">
                                                                     {u.paymentStatus === PaymentStatus.CONFIRMED ? <Lock size={18}/> : <Unlock size={18}/>}
                                                                 </button>
-                                                                <button onClick={() => triggerConfirm("Remover Membro", `Deseja apagar permanentemente a conta de ${u.name}?`, async () => { await db.deleteUser(u.id); refreshData(); }, 'danger')} className="p-5 bg-white/5 text-gray-400 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-lg"><Trash2 size={18}/></button>
+                                                                <button onClick={() => triggerConfirm("Remover", "Deseja apagar a conta?", async () => { await db.deleteUser(u.id); refreshData(); }, 'danger')} className="p-4 bg-white/5 text-gray-400 rounded-2xl hover:bg-red-600 transition-all"><Trash2 size={18}/></button>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -382,47 +360,81 @@ const App: React.FC = () => {
 
                             {adminSubView === 'AJUSTES' && (
                                 <div className="space-y-12 max-w-5xl animate-in slide-in-from-right duration-500">
-                                    <h2 className="text-4xl font-black uppercase tracking-tighter text-white">Configurações do Site</h2>
+                                    <h2 className="text-4xl font-black uppercase tracking-tighter text-white">Personalização do Site</h2>
                                     <form onSubmit={async (e) => {
                                         e.preventDefault();
                                         setIsSaving(true);
                                         await db.updateConfig(siteConfig);
-                                        showToast("Configurações atualizadas!");
+                                        showToast("Site atualizado!");
                                         setIsSaving(false);
                                         refreshData();
                                     }} className="glass-panel p-16 rounded-[60px] border-white/10 space-y-10 shadow-3xl">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                                             <div className="space-y-4">
                                                 <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Chamada Principal</label>
-                                                <input value={siteConfig.heroTitle} onChange={e => setSiteConfig({...siteConfig, heroTitle: e.target.value})} className="w-full bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary" />
+                                                <input value={siteConfig.heroTitle} onChange={e => setSiteConfig({...siteConfig, heroTitle: e.target.value})} className="w-full bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary font-bold" />
                                             </div>
                                             <div className="space-y-4">
                                                 <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Nome da Marca</label>
-                                                <input value={siteConfig.heroLabel} onChange={e => setSiteConfig({...siteConfig, heroLabel: e.target.value})} className="w-full bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary" />
+                                                <input value={siteConfig.heroLabel} onChange={e => setSiteConfig({...siteConfig, heroLabel: e.target.value})} className="w-full bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary font-bold" />
                                             </div>
                                         </div>
                                         <div className="space-y-4">
-                                            <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Subtítulo</label>
+                                            <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Descrição do Portal</label>
                                             <textarea value={siteConfig.heroSubtitle} onChange={e => setSiteConfig({...siteConfig, heroSubtitle: e.target.value})} className="w-full bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary" rows={3} />
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                                             <div className="space-y-4">
-                                                <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">WhatsApp Suporte</label>
+                                                <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">WhatsApp Vendas</label>
                                                 <input value={siteConfig.whatsapp} onChange={e => setSiteConfig({...siteConfig, whatsapp: e.target.value})} className="w-full bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary" placeholder="55..." />
                                             </div>
                                             <div className="space-y-4">
-                                                <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Chave PIX</label>
+                                                <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Chave PIX Recebimento</label>
                                                 <input value={siteConfig.pixKey} onChange={e => setSiteConfig({...siteConfig, pixKey: e.target.value})} className="w-full bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary" />
                                             </div>
                                         </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Foto de Fundo (Hero)</label>
+                                            <div className="flex flex-col md:flex-row gap-6">
+                                                <input value={siteConfig.heroImageUrl} onChange={e => setSiteConfig({...siteConfig, heroImageUrl: e.target.value})} className="flex-1 bg-brand-dark border border-white/10 p-8 rounded-[35px] text-white outline-none focus:border-brand-primary" placeholder="URL da imagem" />
+                                                <button type="button" onClick={() => document.getElementById('heroImgAdmin')?.click()} className="p-8 bg-brand-primary rounded-[35px] text-white hover:scale-105 transition-all shadow-xl"><ImageIcon size={20}/></button>
+                                                <input id="heroImgAdmin" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (b) => setSiteConfig({...siteConfig, heroImageUrl: b}))} />
+                                            </div>
+                                        </div>
                                         <Button type="submit" className="w-full h-24 text-lg font-black uppercase rounded-[45px] shadow-2xl" isLoading={isSaving}>
-                                            <Save size={24}/> Salvar Alterações
+                                            <Save size={24}/> Aplicar Alterações
                                         </Button>
                                     </form>
                                 </div>
                             )}
 
-                            {/* Planos e Categorias Sub-views seriam inseridas aqui para completar o CRUD */}
+                            {/* Gestão de Planos e Categorias (CRUD Básico) */}
+                            {(adminSubView === 'PLANOS' || adminSubView === 'CATEGORIAS') && (
+                                <div className="space-y-12 animate-in slide-in-from-right duration-500">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="text-4xl font-black uppercase tracking-tighter text-white">{adminSubView === 'PLANOS' ? 'Gestão de Planos' : 'Ramos de Atuação'}</h2>
+                                        <Button onClick={() => adminSubView === 'PLANOS' ? setEditingPlan({name:'', price:0, durationDays:30}) : setEditingCategory({name:''})} className="h-14 px-8 rounded-full"><PlusCircle size={20}/> Novo Item</Button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                        {adminSubView === 'PLANOS' ? plans.map(p => (
+                                            <div key={p.id} className="glass-panel p-10 rounded-[40px] border-white/5 relative group">
+                                                <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <button onClick={() => setEditingPlan(p)} className="p-3 bg-brand-primary rounded-xl"><Edit size={16}/></button>
+                                                    <button onClick={() => triggerConfirm("Remover Plano", "Confirmar exclusão?", async () => { await db.deletePlan(p.id); refreshData(); }, 'danger')} className="p-3 bg-red-600 rounded-xl"><Trash2 size={16}/></button>
+                                                </div>
+                                                <h3 className="text-2xl font-black text-white uppercase mb-2">{p.name}</h3>
+                                                <p className="text-3xl font-black text-brand-gold tracking-tighter">R${p.price}</p>
+                                                <p className="text-[10px] text-gray-500 uppercase font-black mt-4">{p.durationDays} dias de duração</p>
+                                            </div>
+                                        )) : categories.map(c => (
+                                            <div key={c.id} className="glass-panel p-8 rounded-[30px] border-white/5 relative group flex justify-between items-center">
+                                                <span className="text-sm font-black text-white uppercase tracking-widest">{c.name}</span>
+                                                <button onClick={() => triggerConfirm("Remover Categoria", "Deseja excluir?", async () => { await db.deleteCategory(c.id); refreshData(); }, 'danger')} className="p-3 bg-red-600/10 text-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </main>
                     </div>
                 )}
@@ -440,25 +452,26 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <Button className="h-20 px-14 text-lg uppercase font-black" onClick={() => setEditingPost({ title: '', content: '', category: currentUser.profession || 'Geral' })}><PlusCircle size={24}/> Criar Anúncio</Button>
+                            <Button className="h-20 px-14 text-lg uppercase font-black rounded-[40px] shadow-2xl" onClick={() => setEditingPost({ title: '', content: '', category: currentUser.profession || 'Geral' })}>
+                                <PlusCircle size={28}/> Criar Anúncio
+                            </Button>
                         </div>
 
-                        {/* IA Studio */}
                         <div className="glass-panel rounded-[80px] p-16 md:p-24 border-brand-primary/20 mb-32 shadow-3xl relative overflow-hidden group">
                             <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-all duration-1000"><Mic size={400} className="text-brand-primary"/></div>
                             <div className="relative z-10 space-y-10">
                                 <h2 className="text-4xl font-black uppercase tracking-tighter text-white flex items-center gap-4"><Zap size={32} className="text-brand-gold" /> Estúdio IA Hélio Júnior</h2>
-                                <p className="text-gray-400 text-lg max-w-2xl font-light">Não sabe o que escrever? Nossa IA cria roteiros profissionais de rádio para o seu negócio.</p>
+                                <p className="text-gray-400 text-lg max-w-2xl font-light">Digite o que deseja vender e a IA criará o roteiro perfeito para você publicar no portal.</p>
                                 <div className="flex flex-col lg:flex-row gap-6">
-                                    <input value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="Ex: Promoção de Pizzas por R$ 29,90..." className="flex-1 bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary text-xl" />
-                                    <Button className="h-24 px-16 uppercase font-black rounded-[40px] text-lg" onClick={async () => {
+                                    <input value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="Ex: Promoção de Bolos para o Dia das Mães..." className="flex-1 bg-white/5 border border-white/10 p-10 rounded-[45px] text-white outline-none focus:border-brand-primary text-xl" />
+                                    <Button className="h-24 px-16 uppercase font-black rounded-[45px] text-lg shadow-2xl" onClick={async () => {
                                         if(!magicPrompt) return;
                                         setIsGeneratingAi(true);
                                         try {
                                           const res = await generateAdCopy(currentUser.profession || 'Geral', magicPrompt, 'short');
-                                          const data = typeof res === 'object' ? res : { title: 'Destaque VIP', content: res };
+                                          const data = typeof res === 'object' ? res : { title: 'Oferta Especial', content: res };
                                           setEditingPost({ title: data.title, content: data.content, category: currentUser.profession || 'Geral' });
-                                          showToast("Texto gerado pela IA!");
+                                          showToast("IA gerou seu conteúdo VIP!");
                                         } finally { setIsGeneratingAi(false); }
                                     }} isLoading={isGeneratingAi}>Gerar Script VIP</Button>
                                 </div>
@@ -469,8 +482,8 @@ const App: React.FC = () => {
                             {posts.filter(p => p.authorId === currentUser.id).map(p => (
                                 <div key={p.id} className="relative group">
                                     <div className="absolute top-8 right-8 z-20 flex gap-4 opacity-0 group-hover:opacity-100 transition-all">
-                                        <button onClick={() => setEditingPost(p)} className="p-5 bg-brand-primary rounded-[25px] text-white shadow-2xl hover:scale-110 transition-all"><Edit size={20}/></button>
-                                        <button onClick={() => triggerConfirm("Excluir Anúncio", "Deseja remover esta publicação permanentemente?", async () => { await db.deletePost(p.id); refreshData(); }, 'danger')} className="p-5 bg-red-600 rounded-[25px] text-white shadow-2xl hover:scale-110 transition-all"><Trash2 size={20}/></button>
+                                        <button onClick={() => setEditingPost(p)} className="p-5 bg-brand-primary rounded-[25px] text-white shadow-2xl hover:scale-110 active:scale-90 transition-all"><Edit size={20}/></button>
+                                        <button onClick={() => triggerConfirm("Excluir Anúncio", "Remover este anúncio do portal?", async () => { await db.deletePost(p.id); refreshData(); }, 'danger')} className="p-5 bg-red-600 rounded-[25px] text-white shadow-2xl hover:scale-110 active:scale-90 transition-all"><Trash2 size={20}/></button>
                                     </div>
                                     <PostCard post={p} />
                                 </div>
@@ -480,7 +493,7 @@ const App: React.FC = () => {
                 )}
             </main>
 
-            {/* Modais Globais */}
+            {/* Modais Globais de Edição */}
             {editingPost && (
                 <div className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-6 backdrop-blur-3xl animate-in zoom-in duration-300">
                     <form onSubmit={async (e) => {
@@ -496,26 +509,72 @@ const App: React.FC = () => {
                             });
                             refreshData();
                             setEditingPost(null);
-                            showToast("Anúncio Salvo!");
+                            showToast("Anúncio salvo com sucesso!");
                         } finally { setIsSaving(false); }
-                    }} className="glass-panel p-16 rounded-[60px] w-full max-w-3xl space-y-12 border-white/10 text-center shadow-3xl">
-                        <h3 className="text-4xl font-black uppercase text-white tracking-tighter">Editor de Publicação</h3>
+                    }} className="glass-panel p-16 rounded-[60px] w-full max-w-4xl space-y-12 border-white/10 text-center shadow-3xl">
+                        <h3 className="text-4xl font-black uppercase text-white tracking-tighter">Editor de Vitrine</h3>
                         <div className="space-y-6 text-left">
                             <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} placeholder="TÍTULO DO ANÚNCIO" className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary text-xl font-bold" required />
-                            <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="CONTEÚDO / SCRIPT DO ANÚNCIO" rows={4} className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary text-lg" required />
+                            <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="CONTEÚDO DO ANÚNCIO (Roteiro da Locução)" rows={4} className="w-full bg-white/5 border border-white/10 p-8 rounded-[40px] text-white outline-none focus:border-brand-primary text-lg font-medium" required />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="bg-brand-dark border border-white/10 p-8 rounded-[40px] text-white uppercase font-black text-[10px] outline-none">
+                                <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="bg-brand-dark border border-white/10 p-8 rounded-[40px] text-white uppercase font-black text-xs outline-none">
                                     {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                 </select>
-                                <button type="button" onClick={() => document.getElementById('postImgUpload')?.click()} className="p-8 bg-white/5 border-2 border-dashed border-white/10 rounded-[40px] text-white font-black text-[10px] uppercase hover:bg-white/10 flex items-center justify-center gap-3">
-                                    <ImageIcon size={18}/> {editingPost.imageUrl ? 'Trocar Imagem' : 'Add Foto'}
+                                <button type="button" onClick={() => document.getElementById('adPhotoUpload')?.click()} className="p-8 bg-white/5 border-2 border-dashed border-white/10 rounded-[40px] text-white font-black text-[10px] uppercase hover:bg-white/10 flex items-center justify-center gap-3">
+                                    <ImageIcon size={18}/> {editingPost.imageUrl ? 'Trocar Foto' : 'Adicionar Foto'}
                                 </button>
-                                <input id="postImgUpload" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (b) => setEditingPost({...editingPost, imageUrl: b}))} />
+                                <input id="adPhotoUpload" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (b) => setEditingPost({...editingPost, imageUrl: b}))} />
                             </div>
                         </div>
                         <div className="flex gap-6">
-                            <Button type="submit" className="flex-1 h-20 uppercase font-black text-lg" isLoading={isSaving}>Publicar Agora</Button>
-                            <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[11px] font-black uppercase text-gray-500 hover:text-white transition-all">Cancelar</button>
+                            <Button type="submit" className="flex-1 h-20 uppercase font-black text-lg rounded-[40px]" isLoading={isSaving}>Publicar Agora</Button>
+                            <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[11px] font-black uppercase text-gray-500 hover:text-white transition-all">Cancelar Edição</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {editingPlan && (
+                <div className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-6 backdrop-blur-3xl animate-in zoom-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault();
+                        setIsSaving(true);
+                        await db.savePlan(editingPlan);
+                        refreshData();
+                        setEditingPlan(null);
+                        setIsSaving(false);
+                    }} className="glass-panel p-16 rounded-[60px] w-full max-w-xl space-y-10 text-center">
+                        <h3 className="text-3xl font-black uppercase text-white">Configurar Plano</h3>
+                        <div className="space-y-6">
+                            <input value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} placeholder="NOME DO PLANO" className="w-full bg-brand-dark p-8 rounded-[35px] text-white outline-none" required />
+                            <div className="grid grid-cols-2 gap-6">
+                                <input type="number" step="0.01" value={editingPlan.price} onChange={e => setEditingPlan({...editingPlan, price: Number(e.target.value)})} placeholder="PREÇO" className="w-full bg-brand-dark p-8 rounded-[35px] text-white outline-none" required />
+                                <input type="number" value={editingPlan.durationDays} onChange={e => setEditingPlan({...editingPlan, durationDays: Number(e.target.value)})} placeholder="DIAS" className="w-full bg-brand-dark p-8 rounded-[35px] text-white outline-none" required />
+                            </div>
+                        </div>
+                        <div className="flex gap-6">
+                            <Button type="submit" className="flex-1 h-16 rounded-full" isLoading={isSaving}>Salvar Plano</Button>
+                            <button type="button" onClick={() => setEditingPlan(null)} className="flex-1 text-xs uppercase font-black text-gray-500">Voltar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {editingCategory && (
+                <div className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-6 backdrop-blur-3xl animate-in zoom-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault();
+                        setIsSaving(true);
+                        await db.saveCategory(editingCategory);
+                        refreshData();
+                        setEditingCategory(null);
+                        setIsSaving(false);
+                    }} className="glass-panel p-12 rounded-[50px] w-full max-w-md space-y-8 text-center">
+                        <h3 className="text-2xl font-black uppercase text-white">Nova Categoria</h3>
+                        <input value={editingCategory.name} onChange={e => setEditingCategory({...editingCategory, name: e.target.value})} placeholder="NOME DO RAMO" className="w-full bg-brand-dark p-8 rounded-[35px] text-white outline-none" required />
+                        <div className="flex gap-6">
+                            <Button type="submit" className="flex-1 h-14 rounded-full" isLoading={isSaving}>Criar</Button>
+                            <button type="button" onClick={() => setEditingCategory(null)} className="flex-1 text-xs uppercase font-black text-gray-500">Sair</button>
                         </div>
                     </form>
                 </div>
@@ -530,8 +589,8 @@ const App: React.FC = () => {
                         <h3 className="text-4xl font-black uppercase text-white tracking-tighter">{confirmModal.title}</h3>
                         <p className="text-gray-400 text-lg font-medium">{confirmModal.message}</p>
                         <div className="flex gap-6 pt-6">
-                            <Button onClick={confirmModal.onConfirm} variant={confirmModal.variant === 'danger' ? 'danger' : 'primary'} className="flex-1 h-20 text-sm uppercase font-black">Confirmar</Button>
-                            <button onClick={() => setConfirmModal(prev => ({...prev, isOpen: false}))} className="flex-1 text-[11px] font-black uppercase text-gray-500 hover:text-white transition-all">Sair</button>
+                            <Button onClick={confirmModal.onConfirm} variant={confirmModal.variant === 'danger' ? 'danger' : 'primary'} className="flex-1 h-20 text-sm uppercase font-black rounded-[35px] shadow-2xl">Confirmar</Button>
+                            <button onClick={() => setConfirmModal(prev => ({...prev, isOpen: false}))} className="flex-1 text-[11px] font-black uppercase text-gray-500 hover:text-white transition-all">Voltar</button>
                         </div>
                     </div>
                 </div>
