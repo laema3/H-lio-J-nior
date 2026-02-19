@@ -34,25 +34,21 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-brand-dark/80 backdrop-blur-2xl border-b border-white/5">
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
-        <div className="flex items-center justify-between h-24">
+        <div className="flex items-center justify-between h-20">
           
           <div 
             className="flex items-center gap-6 cursor-pointer group" 
             onClick={() => {setCurrentView('HOME'); window.scrollTo(0,0);}}
           >
-            <div className="h-14 min-w-[140px] flex items-center justify-center transition-all duration-500 overflow-hidden relative">
+            <div className="h-12 min-w-[120px] flex items-center justify-center transition-all duration-500 overflow-hidden relative">
               {config.headerLogoUrl ? (
                 <img src={config.headerLogoUrl} className="h-full w-auto object-contain group-hover:scale-110 transition-transform" alt="Logo VIP" />
               ) : (
                 <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-2xl border border-white/10 group-hover:border-brand-primary transition-colors">
-                    <Radio className="text-brand-primary w-6 h-6 animate-pulse" />
-                    <span className="text-[12px] font-black text-white uppercase tracking-tighter line-clamp-1">{config.heroLabel}</span>
+                    <Radio className="text-brand-primary w-5 h-5 animate-pulse" />
+                    <span className="text-[11px] font-black text-white uppercase tracking-tighter">{config.heroLabel}</span>
                 </div>
               )}
-            </div>
-            <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-[8px] font-black uppercase border shadow-lg ${isOnline ? 'text-green-500 border-green-500/20 bg-green-500/5' : 'text-red-500 border-red-500/20 bg-red-500/5'}`}>
-               <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-               {isOnline ? 'Online' : 'Offline'}
             </div>
           </div>
 
@@ -60,10 +56,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
             {navItem('Início', 'HOME', currentView === 'HOME')}
             {!currentUser && (
               <>
-                {navItem('Painel VIP', 'LOGIN', currentView === 'LOGIN')}
+                {navItem('Entrar', 'LOGIN', currentView === 'LOGIN')}
                 <button
                     onClick={() => setCurrentView('REGISTER')}
-                    className="ml-4 px-8 py-3 bg-gradient-to-r from-brand-accent to-orange-600 text-white rounded-[20px] text-[10px] font-black uppercase tracking-[0.2em] hover:shadow-2xl hover:shadow-orange-500/40 transition-all transform hover:-translate-y-1 active:scale-95"
+                    className="ml-4 px-8 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-[20px] text-[10px] font-black uppercase tracking-[0.2em] hover:shadow-2xl hover:shadow-orange-500/40 transition-all transform hover:-translate-y-1 active:scale-95"
                 >
                     Anunciar Agora
                 </button>
@@ -74,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                 <div className="text-right hidden sm:block">
                     <p className="text-xs font-black text-white uppercase tracking-tighter flex items-center justify-end gap-2">
                       {currentUser.name}
-                      {currentUser.role === UserRole.ADMIN && <Shield size={12} className="text-brand-accent"/>}
+                      {currentUser.role === UserRole.ADMIN && <Shield size={12} className="text-brand-gold"/>}
                     </p>
                     <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Membro VIP'}</p>
                 </div>
@@ -91,14 +87,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
         </div>
       </div>
       
-      {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-24 left-0 right-0 bg-brand-dark/95 backdrop-blur-3xl border-b border-white/10 p-6 flex flex-col gap-4 animate-in slide-in-from-top">
+        <div className="md:hidden absolute top-20 left-0 right-0 bg-brand-dark/95 backdrop-blur-3xl border-b border-white/10 p-6 flex flex-col gap-4 animate-in slide-in-from-top">
             <button onClick={() => {setCurrentView('HOME'); setIsMenuOpen(false);}} className="p-5 text-left text-[11px] font-black uppercase text-white border-b border-white/5 tracking-widest">Início</button>
             {!currentUser ? (
                 <>
                     <button onClick={() => {setCurrentView('LOGIN'); setIsMenuOpen(false);}} className="p-5 text-left text-[11px] font-black uppercase text-white border-b border-white/5 tracking-widest">Entrar</button>
-                    <button onClick={() => {setCurrentView('REGISTER'); setIsMenuOpen(false);}} className="p-5 text-center bg-brand-primary rounded-2xl text-[11px] font-black uppercase text-white tracking-widest">Quero Anunciar</button>
+                    <button onClick={() => {setCurrentView('REGISTER'); setIsMenuOpen(false);}} className="p-5 text-center bg-orange-600 rounded-2xl text-[11px] font-black uppercase text-white tracking-widest shadow-xl">Anunciar Agora</button>
                 </>
             ) : (
                 <>

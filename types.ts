@@ -34,6 +34,9 @@ export interface SiteConfig {
   pixKey?: string;
   pixName?: string;
   whatsapp?: string;
+  phone?: string;
+  instagram?: string;
+  facebook?: string;
 }
 
 export interface User {
@@ -60,10 +63,11 @@ export interface Post {
   content: string;
   whatsapp?: string;
   phone?: string;
-  imageUrl?: string; 
+  imageUrls?: string[]; // Array de até 5 imagens
   logoUrl?: string; 
-  audioData?: string; // Base64 do áudio gerado
+  audioData?: string;
   createdAt: string;
+  expiresAt?: string; // Data final do anúncio
 }
 
 export type ViewState = 'HOME' | 'LOGIN' | 'REGISTER' | 'DASHBOARD' | 'ADMIN' | 'PAYMENT';
