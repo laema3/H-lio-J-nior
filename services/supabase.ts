@@ -23,8 +23,8 @@ const getLocal = (key: string, def: any) => {
 const saveLocal = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
 
 const DEFAULT_PLANS: Plan[] = [
-  { id: 'p1', name: 'Mensal Gold', price: 49.90, durationDays: 30, description: 'Destaque Mensal' },
-  { id: 'p2', name: 'Trimestral VIP', price: 129.00, durationDays: 90, description: 'Destaque VIP' }
+  { id: 'p_free', name: 'Degustação Grátis', price: 0, durationDays: 30, description: 'Teste por 30 dias sem custo.' },
+  { id: 'p_gold', name: 'Plano Mensal Gold', price: 49.90, durationDays: 30, description: 'Destaque Mensal' }
 ];
 
 const DEFAULT_CATEGORIES: Category[] = [
@@ -108,6 +108,18 @@ export const db = {
     } catch { return getLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS); }
   },
 
+  // Added missing getCategories method to fix App.tsx error
+  async getCategories(): Promise<Category[]> {
+    try {
+      const { data, error } = await supabase.from('categories').select('*').order('name');
+      if (error || !data || data.length === 0) return getLocal(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
+      return data.map(c => ({
+        id: String(c.id),
+        name: c.name
+      }));
+    } catch { return getLocal(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES); }
+  },
+
   async savePlan(plan: Partial<Plan>) {
     const plans = await this.getPlans();
     const newPlan = { ...plan, id: plan.id || 'pl-' + Date.now() } as Plan;
@@ -174,28 +186,6 @@ export const db = {
     const users = await this.getUsers();
     saveLocal(STORAGE_KEYS.USERS, users.filter(u => u.id !== id));
     try { await supabase.from('profiles').delete().eq('id', id); } catch(e) {}
-  },
-
-  async getCategories(): Promise<Category[]> {
-    try {
-      const { data, error } = await supabase.from('categories').select('*').order('name');
-      if (error || !data || data.length === 0) return getLocal(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
-      return data.map(c => ({ id: String(c.id), name: c.name }));
-    } catch { return getLocal(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES); }
-  },
-
-  async saveCategory(cat: Partial<Category>) {
-    const cats = await this.getCategories();
-    const newCat = { ...cat, id: cat.id || 'cat-' + Date.now() } as Category;
-    const updated = cats.some(c => c.id === newCat.id) ? cats.map(c => c.id === newCat.id ? newCat : c) : [...cats, newCat];
-    saveLocal(STORAGE_KEYS.CATEGORIES, updated);
-    try { await supabase.from('categories').upsert(toDb(newCat)); } catch(e) {}
-  },
-
-  async deleteCategory(id: string) {
-    const cats = await this.getCategories();
-    saveLocal(STORAGE_KEYS.CATEGORIES, cats.filter(c => c.id !== id));
-    try { await supabase.from('categories').delete().eq('id', id); } catch(e) {}
   },
 
   async getPosts(): Promise<Post[]> {
