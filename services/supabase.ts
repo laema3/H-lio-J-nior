@@ -7,7 +7,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Fallback Storage Keys
 const STORAGE_KEYS = {
   CONFIG: 'hj_fallback_config',
   PLANS: 'hj_fallback_plans',
@@ -23,7 +22,6 @@ const getLocal = (key: string, def: any) => {
 
 const saveLocal = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
 
-// Inicialização de dados padrão caso o Supabase falhe
 const DEFAULT_PLANS: Plan[] = [
   { id: 'p1', name: 'Mensal Gold', price: 49.90, durationDays: 30, description: 'Destaque Mensal' },
   { id: 'p2', name: 'Trimestral VIP', price: 129.00, durationDays: 90, description: 'Destaque VIP' }
@@ -33,7 +31,6 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'c1', name: 'Comércio' }, { id: 'c2', name: 'Serviços' }, { id: 'c3', name: 'Saúde' }
 ];
 
-// Mapeamento Helper
 const toDb = (obj: any) => {
   const out: any = {};
   for (const k in obj) {
@@ -44,6 +41,26 @@ const toDb = (obj: any) => {
 };
 
 export const db = {
+  async init() {
+    // Garante que exista um admin no LocalStorage caso o Supabase falhe
+    const users = getLocal(STORAGE_KEYS.USERS, []);
+    if (!users.find((u: any) => u.email === 'admin@helio.com')) {
+      const admin: User = {
+        id: 'admin',
+        name: 'Hélio Júnior',
+        email: 'admin@helio.com',
+        password: 'admin',
+        role: UserRole.ADMIN,
+        paymentStatus: PaymentStatus.NOT_APPLICABLE,
+        createdAt: new Date().toISOString()
+      };
+      saveLocal(STORAGE_KEYS.USERS, [...users, admin]);
+    }
+    
+    if (getLocal(STORAGE_KEYS.PLANS, []).length === 0) saveLocal(STORAGE_KEYS.PLANS, DEFAULT_PLANS);
+    if (getLocal(STORAGE_KEYS.CATEGORIES, []).length === 0) saveLocal(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
+  },
+
   async getConfig(): Promise<SiteConfig> {
     try {
       const { data, error } = await supabase.from('site_config').select('*').eq('id', 1).maybeSingle();
@@ -89,8 +106,6 @@ export const db = {
     const newPlan = { ...plan, id: plan.id || 'pl-' + Date.now() } as Plan;
     const updated = plans.some(p => p.id === newPlan.id) ? plans.map(p => p.id === newPlan.id ? newPlan : p) : [...plans, newPlan];
     saveLocal(STORAGE_KEYS.PLANS, updated);
-    
-    // Tenta no Supabase mas não trava se falhar
     try { await supabase.from('plans').upsert(toDb(newPlan)); } catch(e) {}
   },
 
@@ -115,7 +130,6 @@ export const db = {
   },
 
   async authenticate(email: string, pass: string): Promise<User | null> {
-    // Primeiro tenta local (para usuários criados via fallback)
     const localUsers = getLocal(STORAGE_KEYS.USERS, []);
     const foundLocal = localUsers.find((u: any) => u.email.toLowerCase() === email.toLowerCase() && u.password === pass);
     if (foundLocal) return foundLocal;
