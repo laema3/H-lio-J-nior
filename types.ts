@@ -38,6 +38,7 @@ export interface SiteConfig {
   phone?: string;
   instagram?: string;
   facebook?: string;
+  maintenanceMode?: boolean;
 }
 
 export interface User {

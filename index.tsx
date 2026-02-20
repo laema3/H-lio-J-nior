@@ -9,10 +9,10 @@ import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { ChatBot } from './components/ChatBot';
 import { 
-    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Crown, ArrowRight, Ban, Sparkles
+    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Crown, ArrowRight, Ban, Sparkles, Hammer, Info, Eye, EyeOff, RefreshCw
 } from 'lucide-react';
 
-const SESSION_KEY = 'helio_junior_vip_session_v10';
+const SESSION_KEY = 'helio_junior_vip_session_v11';
 const ADMIN_WHATSAPP = '5534999982000';
 
 const App: React.FC = () => {
@@ -38,7 +38,8 @@ const App: React.FC = () => {
         whatsapp: '5534999982000',
         phone: '34999982000',
         instagram: '@heliojunior',
-        facebook: 'heliojunior'
+        facebook: 'heliojunior',
+        maintenanceMode: false
     });
 
     const [isLoadingData, setIsLoadingData] = useState(true);
@@ -46,8 +47,7 @@ const App: React.FC = () => {
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
     const [isGeneratingAi, setIsGeneratingAi] = useState(false);
-    const [magicPrompt, setMagicPrompt] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('Comércio');
+    const [showPassword, setShowPassword] = useState(false);
 
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
@@ -95,7 +95,7 @@ const App: React.FC = () => {
             if (p) setPosts(p);
             if (u) setAllUsers(u);
             if (pl) setPlans(pl);
-            if (cfg && cfg.heroTitle) setSiteConfig(prev => ({...prev, ...cfg}));
+            if (cfg) setSiteConfig(prev => ({...prev, ...cfg}));
             if (cats) setCategories(cats);
             
             if (currentUser) {
@@ -130,6 +130,61 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.ADMIN) return posts;
         return posts.filter(p => p.authorId === currentUser.id);
     }, [posts, currentUser]);
+
+    const handleSavePost = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingPost) return;
+        setIsSaving(true);
+        try {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 30); 
+            await db.savePost({ 
+                ...editingPost, 
+                authorId: editingPost.authorId || currentUser?.id, 
+                authorName: editingPost.authorName || currentUser?.name, 
+                whatsapp: editingPost.whatsapp || currentUser?.phone, 
+                phone: editingPost.phone || currentUser?.phone,
+                expiresAt: editingPost.expiresAt || expiresAt.toISOString(),
+                createdAt: editingPost.createdAt || new Date().toISOString()
+            });
+            await refreshData(); 
+            setEditingPost(null);
+            showToast("Anúncio Publicado com Sucesso!");
+        } catch (e) {
+            showToast("Falha ao salvar. Tente fotos menores.", "error");
+        } finally { setIsSaving(false); }
+    };
+
+    const handleDeletePost = async (id: string) => {
+        if (confirm('Tem certeza que deseja excluir permanentemente este anúncio?')) {
+            await db.deletePost(id);
+            await refreshData();
+            showToast("Anúncio removido.");
+        }
+    };
+
+    if (siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN) {
+        return (
+            <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center p-6 text-center">
+                <div className="glass-panel p-12 md:p-20 rounded-[50px] max-w-2xl border-orange-600/20 shadow-3xl animate-in fade-in zoom-in duration-500">
+                    <div className="w-24 h-24 bg-orange-600/10 rounded-full flex items-center justify-center text-orange-500 mx-auto mb-10 border border-orange-600/20 animate-bounce">
+                        <Hammer size={48} />
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter mb-6 leading-none">
+                        Portal em <span className="text-orange-600">Manutenção</span>
+                    </h1>
+                    <p className="text-lg text-gray-400 font-light leading-relaxed mb-10">
+                        Estamos realizando melhorias técnicas para oferecer a melhor experiência em locução e classificados. Volte em alguns instantes!
+                    </p>
+                    <div className="flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.3em] text-orange-500">
+                        <div className="w-2 h-2 rounded-full bg-orange-600 animate-ping" />
+                        Ajustando as Frequências...
+                    </div>
+                </div>
+                <button onClick={() => setCurrentView('LOGIN')} className="mt-8 text-[9px] font-black uppercase text-gray-700 tracking-widest hover:text-gray-500">Acesso Restrito</button>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-brand-dark text-gray-100 flex flex-col font-sans">
@@ -200,10 +255,13 @@ const App: React.FC = () => {
                                             setCurrentUser(u);
                                             localStorage.setItem(SESSION_KEY, JSON.stringify(u));
                                             setCurrentView(u.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD');
-                                        } else showToast("Acesso Negado ou Conta Bloqueada", "error");
+                                            showToast(`Bem-vindo, ${u.name}!`);
+                                        } else {
+                                            showToast("Dados Incorretos. Verifique e-mail/senha.", "error");
+                                        }
                                     } else {
                                         const newUser = await db.addUser({ 
-                                            name: fd.get('name') as string, email: fd.get('email') as string, password: fd.get('password') as string, 
+                                            name: fd.get('name') as string, email: (fd.get('email') as string).toLowerCase(), password: fd.get('password') as string, 
                                             phone: fd.get('phone') as string, role: UserRole.ADVERTISER, paymentStatus: PaymentStatus.CONFIRMED,
                                             status: 'ACTIVE'
                                         });
@@ -220,14 +278,43 @@ const App: React.FC = () => {
                                         <input name="phone" required placeholder="WHATSAPP (DDD)" className="w-full bg-white/5 border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 uppercase text-[10px] font-black tracking-widest" />
                                     </>
                                 )}
-                                <input name="email" required type="email" placeholder="E-MAIL" className="w-full bg-white/5 border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 uppercase text-[10px] font-black tracking-widest" />
-                                <input name="password" required type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 uppercase text-[10px] font-black tracking-widest" />
+                                <input name="email" required type="email" placeholder="E-MAIL" className="w-full bg-white/5 border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 lowercase text-[10px] font-black tracking-widest" />
+                                <div className="relative">
+                                    <input 
+                                        name="password" 
+                                        required 
+                                        type={showPassword ? "text" : "password"} 
+                                        placeholder="SENHA" 
+                                        className="w-full bg-white/5 border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 text-[10px] font-black tracking-widest" 
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowPassword(!showPassword)} 
+                                        className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
                                 <button type="submit" className="w-full h-14 bg-orange-600 text-white rounded-[20px] font-black uppercase text-[11px] shadow-xl flex items-center justify-center gap-3 hover:bg-orange-700 transition-all">
                                     {isLoggingIn && <Loader2 className="animate-spin" size={20}/>} {currentView === 'LOGIN' ? 'Entrar Agora' : 'Finalizar Cadastro'}
                                 </button>
-                                <button type="button" onClick={() => setCurrentView(currentView === 'LOGIN' ? 'REGISTER' : 'LOGIN')} className="text-[10px] text-gray-500 font-black uppercase tracking-widest mt-6 hover:text-white transition-colors">
-                                    {currentView === 'LOGIN' ? 'Não tem conta? Cadastre-se aqui' : 'Já sou assinante'}
-                                </button>
+                                
+                                <div className="pt-4 flex flex-col gap-4">
+                                    <button type="button" onClick={() => setCurrentView(currentView === 'LOGIN' ? 'REGISTER' : 'LOGIN')} className="text-[10px] text-gray-500 font-black uppercase tracking-widest hover:text-white transition-colors">
+                                        {currentView === 'LOGIN' ? 'Não tem conta? Cadastre-se aqui' : 'Já sou assinante'}
+                                    </button>
+                                    
+                                    <button 
+                                        type="button" 
+                                        onClick={async () => {
+                                            await db.init();
+                                            showToast("Credenciais Admin Sincronizadas com o Navegador!");
+                                        }}
+                                        className="inline-flex items-center justify-center gap-2 text-[8px] font-black text-orange-500/50 uppercase tracking-widest hover:text-orange-500 transition-colors"
+                                    >
+                                        <RefreshCw size={10} /> Sincronizar Acesso Local
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -253,38 +340,16 @@ const App: React.FC = () => {
                             </Button>
                         </div>
 
-                        <div className="glass-panel rounded-[35px] p-8 border-orange-600/20 mb-12 shadow-3xl bg-orange-600/[0.02]">
-                             <div className="flex items-center gap-4 mb-6">
-                                <div className="w-10 h-10 bg-orange-600/20 rounded-xl flex items-center justify-center text-orange-500"><Mic size={20}/></div>
-                                <h3 className="text-xl font-black uppercase text-white tracking-tighter">Locutor Virtual IA</h3>
-                             </div>
-                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                <div className="lg:col-span-2">
-                                    <textarea value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="O que você quer vender? Digite aqui..." className="w-full bg-brand-dark border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 min-h-[100px] text-sm" />
-                                </div>
-                                <div className="space-y-3">
-                                    <Button className="w-full h-14 uppercase font-black text-[10px]" onClick={async () => {
-                                        setIsGeneratingAi(true);
-                                        try {
-                                          const res = await generateAdCopy(selectedCategory, magicPrompt, 'short');
-                                          const data = typeof res === 'object' ? res : { title: 'Oferta VIP', content: res };
-                                          setEditingPost({ title: data.title, content: data.content, category: selectedCategory, imageUrls: [] });
-                                        } finally { setIsGeneratingAi(false); }
-                                    }} isLoading={isGeneratingAi}><Zap size={16}/> Gerar Texto VIP</Button>
-                                </div>
-                             </div>
-                        </div>
-
-                        <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios</h3>
+                        <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios Publicados</h3>
                         {userPosts.length === 0 ? (
-                            <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10 opacity-30">Você ainda não criou nenhum anúncio.</div>
+                            <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10 opacity-30">Você ainda não criou nenhum anúncio no portal.</div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                 {userPosts.map(p => (
                                     <div key={p.id} className="relative group">
                                         <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                             <button onClick={() => setEditingPost(p)} className="p-3 bg-orange-600 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
-                                            <button onClick={async () => { if(confirm('Deseja excluir definitivamente este anúncio?')) { await db.deletePost(p.id); refreshData(); showToast("Excluído"); } }} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
+                                            <button onClick={() => handleDeletePost(p.id)} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
                                         </div>
                                         <PostCard post={p} />
                                     </div>
@@ -361,7 +426,7 @@ const App: React.FC = () => {
                                             <div key={p.id} className="relative group">
                                                 <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                     <button onClick={() => setEditingPost(p)} className="p-2 bg-orange-600 rounded-lg text-white"><Edit size={14}/></button>
-                                                    <button onClick={async () => { if(confirm('Remover este anúncio do portal?')) { await db.deletePost(p.id); refreshData(); showToast("Removido"); } }} className="p-2 bg-red-600 rounded-lg text-white"><Trash2 size={14}/></button>
+                                                    <button onClick={() => handleDeletePost(p.id)} className="p-2 bg-red-600 rounded-lg text-white"><Trash2 size={14}/></button>
                                                 </div>
                                                 <PostCard post={p} />
                                             </div>
@@ -418,6 +483,24 @@ const App: React.FC = () => {
                                 <div className="max-w-4xl space-y-10">
                                     <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Identidade Visual do Portal</h3>
                                     
+                                    <div className="glass-panel p-6 rounded-3xl border-orange-600/20 bg-orange-600/5 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`p-3 rounded-2xl ${siteConfig.maintenanceMode ? 'bg-orange-600 text-white' : 'bg-white/5 text-gray-500'}`}>
+                                                <Hammer size={24} />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-black uppercase text-white tracking-tight">Modo Manutenção</h4>
+                                                <p className="text-[10px] text-gray-500 font-bold">Bloqueia o acesso de visitantes enquanto você edita.</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => setSiteConfig({...siteConfig, maintenanceMode: !siteConfig.maintenanceMode})}
+                                            className={`w-16 h-8 rounded-full transition-all relative p-1 ${siteConfig.maintenanceMode ? 'bg-orange-600' : 'bg-white/10'}`}
+                                        >
+                                            <div className={`w-6 h-6 bg-white rounded-full shadow-lg transition-all ${siteConfig.maintenanceMode ? 'translate-x-8' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="space-y-4">
                                             <label className="text-[9px] font-black uppercase text-gray-500">Logo do Topo</label>
@@ -457,14 +540,14 @@ const App: React.FC = () => {
                                         setIsSaving(true);
                                         try {
                                             await db.updateConfig(siteConfig); 
-                                            showToast("Identidade Visual Atualizada!"); 
+                                            showToast("Configurações Salvas!"); 
                                             await refreshData(); 
                                         } catch (e) {
-                                            showToast("Erro ao salvar no banco. Tente fotos menores.", "error");
+                                            showToast("Erro ao salvar no banco.", "error");
                                         } finally {
                                             setIsSaving(false);
                                         }
-                                    }} isLoading={isSaving} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Identidade</Button>
+                                    }} isLoading={isSaving} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Todas as Alterações</Button>
                                 </div>
                             )}
                         </main>
@@ -474,45 +557,27 @@ const App: React.FC = () => {
 
             {editingPost && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300 overflow-y-auto">
-                    <form onSubmit={async (e) => {
-                        e.preventDefault(); setIsSaving(true);
-                        try {
-                            const expiresAt = new Date();
-                            expiresAt.setDate(expiresAt.getDate() + 7); 
-                            await db.savePost({ 
-                                ...editingPost, 
-                                authorId: editingPost.authorId || currentUser?.id, 
-                                authorName: editingPost.authorName || currentUser?.name, 
-                                whatsapp: editingPost.whatsapp || currentUser?.phone, 
-                                phone: editingPost.phone || currentUser?.phone,
-                                expiresAt: editingPost.expiresAt || expiresAt.toISOString(),
-                                createdAt: editingPost.createdAt || new Date().toISOString()
-                            });
-                            refreshData(); setEditingPost(null);
-                            showToast("Anúncio Publicado!");
-                        } catch (e) {
-                            showToast("Falha ao salvar. Tente reduzir as fotos.", "error");
-                        } finally { setIsSaving(false); }
-                    }} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
-                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter text-center">Configurar Anúncio VIP</h3>
+                    <form onSubmit={handleSavePost} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
+                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter text-center">{editingPost.id ? 'Editar Anúncio VIP' : 'Configurar Novo Anúncio'}</h3>
                         <div className="space-y-4">
                             <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} placeholder="TÍTULO CHAMATIVO" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" required />
                             
-                            <div className="relative">
-                                <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="DESCRIÇÃO DO SEU ANÚNCIO" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm pr-16" required />
+                            <div className="relative group">
+                                <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="O QUE VOCÊ ESTÁ OFERECENDO? (A IA PODE TE AJUDAR ->)" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm pr-16" required />
                                 <button 
-                                    type="button" 
-                                    title="Gerar descrição com IA"
+                                    type="button"
+                                    title="Gerar descrição mágica com IA"
                                     onClick={async () => {
-                                        if(!editingPost.title) return showToast("Digite um título primeiro", "error");
+                                        if(!editingPost.title) return showToast("Digite um título primeiro para a IA!", "error");
                                         setIsGeneratingAi(true);
                                         try {
                                             const copy = await generateAdCopy(editingPost.category || 'Vendas', editingPost.title, 'short');
-                                            setEditingPost({ ...editingPost, content: typeof copy === 'object' ? copy.content : copy });
-                                            showToast("Descrição gerada!");
+                                            const newContent = typeof copy === 'object' ? copy.content : copy;
+                                            setEditingPost({...editingPost, content: newContent});
+                                            showToast("Mágica feita!");
                                         } finally { setIsGeneratingAi(false); }
                                     }}
-                                    className="absolute right-4 top-4 p-2 bg-orange-600/20 text-orange-500 rounded-xl hover:bg-orange-600 hover:text-white transition-all border border-orange-600/30"
+                                    className="absolute right-4 top-4 p-3 bg-orange-600/20 text-orange-500 rounded-xl hover:bg-orange-600 hover:text-white transition-all border border-orange-600/30 group-hover:scale-105"
                                 >
                                     {isGeneratingAi ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                                 </button>
@@ -524,15 +589,15 @@ const App: React.FC = () => {
                                 </select>
                                 <div className="space-y-2">
                                     <button type="button" onClick={() => document.getElementById('adUpV7')?.click()} className="w-full p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl text-white font-black text-[10px] uppercase hover:bg-white/10 flex items-center justify-center gap-3">
-                                        <ImageIcon size={18}/> {editingPost.imageUrls?.length ? `${editingPost.imageUrls.length} Fotos Adicionadas` : 'Enviar Fotos (Máx 5)'}
+                                        <ImageIcon size={18}/> {editingPost.imageUrls?.length ? `${editingPost.imageUrls.length} Fotos Adicionadas` : 'Adicionar Fotos (Máx 5)'}
                                     </button>
                                     <input id="adUpV7" type="file" multiple className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, imageUrls: arr}))} />
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1 h-14 rounded-2xl" isLoading={isSaving}>Publicar Anúncio</Button>
-                            <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500">Fechar</button>
+                            <Button type="submit" className="flex-1 h-14 rounded-2xl" isLoading={isSaving}>{editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio'}</Button>
+                            <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>
                 </div>
