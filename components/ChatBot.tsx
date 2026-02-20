@@ -62,7 +62,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({ whatsapp }) => {
       <div className="pointer-events-auto">
         {/* Janela de Chat */}
         {isOpen && (
-          <div className="mb-4 w-[350px] md:w-[400px] h-[520px] glass-panel rounded-[30px] shadow-2xl flex flex-col overflow-hidden border border-white/10 animate-in slide-in-from-bottom duration-300">
+          <div className="mb-4 w-[350px] md:w-[400px] h-[520px] glass-panel bg-white rounded-[30px] shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-in slide-in-from-bottom duration-300">
             {/* Header */}
             <div className="bg-orange-600 p-5 flex items-center justify-between text-white shadow-lg">
               <div className="flex items-center gap-3">
@@ -80,13 +80,13 @@ export const ChatBot: React.FC<ChatBotProps> = ({ whatsapp }) => {
             </div>
 
             {/* Mensagens */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide bg-brand-dark/30">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/30">
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[85%] p-4 rounded-[22px] text-[13px] leading-relaxed shadow-sm ${
                     m.role === 'user' 
                       ? 'bg-orange-600 text-white rounded-br-none' 
-                      : 'bg-white/5 text-gray-200 border border-white/5 rounded-bl-none'
+                      : 'bg-white text-slate-700 border border-slate-100 rounded-bl-none'
                   }`}>
                     {m.text}
                   </div>
@@ -94,8 +94,8 @@ export const ChatBot: React.FC<ChatBotProps> = ({ whatsapp }) => {
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-white/5 p-4 rounded-[22px] rounded-bl-none border border-white/5">
-                    <Loader2 size={16} className="text-orange-500 animate-spin" />
+                  <div className="bg-white p-4 rounded-[22px] rounded-bl-none border border-slate-100">
+                    <Loader2 size={16} className="text-orange-600 animate-spin" />
                   </div>
                 </div>
               )}
@@ -103,7 +103,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({ whatsapp }) => {
             </div>
 
             {/* Footer / Ações */}
-            <div className="p-4 bg-black/40 border-t border-white/5 space-y-3">
+            <div className="p-4 bg-white border-t border-slate-100 space-y-3">
                <button 
                   onClick={handleWhatsApp}
                   className="w-full h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase transition-all shadow-md active:scale-95"
@@ -118,7 +118,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({ whatsapp }) => {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Escreva sua dúvida aqui..."
-                  className="flex-1 bg-white/5 border border-white/10 p-4 rounded-xl text-xs text-white outline-none focus:border-orange-500 transition-all placeholder:text-gray-600"
+                  className="flex-1 bg-slate-50 border border-slate-200 p-4 rounded-xl text-xs text-slate-900 outline-none focus:border-orange-600 transition-all placeholder:text-slate-400"
                 />
                 <button 
                   onClick={handleSend}
@@ -135,11 +135,11 @@ export const ChatBot: React.FC<ChatBotProps> = ({ whatsapp }) => {
         {/* Botão Flutuante Principal */}
         <button 
           onClick={() => setIsOpen(!isOpen)}
-          className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-110 hover:rotate-3 hover:bg-orange-700 transition-all duration-300 border-2 border-white/10 relative"
+          className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-110 hover:rotate-3 hover:bg-orange-700 transition-all duration-300 border-2 border-white/20 relative"
         >
           {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
           {!isOpen && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 border-2 border-brand-dark rounded-full animate-bounce"></span>
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full animate-bounce"></span>
           )}
         </button>
       </div>

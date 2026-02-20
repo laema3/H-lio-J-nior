@@ -17,11 +17,10 @@
             },
             colors: {
               brand: {
-                dark: '#050a15',
-                panel: '#0f172a',
-                primary: '#6366f1',
-                gold: '#fbbf24',
-                premium: '#fcd34d',
+                dark: '#f8fafc',
+                panel: '#ffffff',
+                primary: '#f97316',
+                accent: '#ea580c',
               }
             },
             animation: {
@@ -40,33 +39,32 @@
     </script>
     <style>
       body {
-        background-color: #050a15;
-        color: #f8fafc;
+        background: radial-gradient(circle at top right, #f1f5f9, #f8fafc);
+        background-attachment: fixed;
+        color: #0f172a;
         overflow-x: hidden;
       }
       .glass-panel {
-        background: rgba(15, 23, 42, 0.6);
+        background: rgba(255, 255, 255, 0.7);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04);
       }
-      .gold-gradient {
-        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
-      }
-      .premium-shadow {
-        box-shadow: 0 0 50px -12px rgba(99, 102, 241, 0.2);
+      .orange-gradient {
+        background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
       }
       ::-webkit-scrollbar {
         width: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #050a15;
+        background: #f1f5f9;
       }
       ::-webkit-scrollbar-thumb {
-        background: #1e293b;
+        background: #cbd5e1;
         border-radius: 10px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #6366f1;
+        background: #f97316;
       }
     </style>
   <script type="importmap">
@@ -85,7 +83,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- ESTA É A LINHA QUE FALTAVA: -->
     <script type="module" src="index.tsx"></script>
   </body>
 </html>
