@@ -114,6 +114,12 @@ export const App: React.FC = () => {
 
     useEffect(() => { refreshData(); }, []);
 
+    useEffect(() => {
+        if (siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN) {
+            setCurrentView('HOME');
+        }
+    }, [siteConfig.maintenanceMode, currentUser]);
+
     const planCountdown = useMemo(() => {
         if (!currentUser?.expiresAt) return null;
         const diff = new Date(currentUser.expiresAt).getTime() - new Date().getTime();
@@ -139,7 +145,15 @@ export const App: React.FC = () => {
             <Navbar currentUser={currentUser} setCurrentView={setCurrentView} currentView={currentView} onLogout={handleLogout} config={siteConfig} isOnline={!isLoadingData} />
             
             <main className="flex-1">
-                {currentView === 'HOME' && (
+                {siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-center p-10">
+                        <div className="glass-panel p-12 rounded-[40px] border-orange-500/20">
+                            <Shield size={60} className="text-orange-500 mx-auto mb-6"/>
+                            <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-4">Portal em Manutenção</h1>
+                            <p className="text-gray-400 max-w-md">Estamos realizando melhorias em nosso sistema. Voltamos em breve!</p>
+                        </div>
+                    </div>
+                ) : currentView === 'HOME' && (
                     <div className="animate-in fade-in duration-700">
                         <section className="pt-24 pb-8 lg:pt-28 lg:pb-10 px-6">
                             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
@@ -196,21 +210,27 @@ export const App: React.FC = () => {
                                     <p className="text-gray-500 max-w-2xl mx-auto text-sm">Alcance milhares de ouvintes e leitores com a tecnologia do rádio digital.</p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                    {plans.map(plan => (
-                                        <div key={plan.id} className={`glass-panel p-10 rounded-[40px] border-white/10 flex flex-col items-center text-center transition-all hover:border-orange-600/50 ${plan.price === 0 ? 'opacity-80' : 'scale-105 border-orange-600/20 shadow-2xl shadow-orange-600/5'}`}>
-                                            <div className="w-12 h-12 rounded-2xl bg-orange-600/10 flex items-center justify-center text-orange-500 mb-6">
-                                                {plan.price === 0 ? <Star size={24}/> : <Crown size={24}/>}
+                                    {plans.length > 0 ? (
+                                        plans.map(plan => (
+                                            <div key={plan.id} className={`glass-panel p-10 rounded-[40px] border-white/10 flex flex-col items-center text-center transition-all hover:border-orange-600/50 ${plan.price === 0 ? 'opacity-80' : 'scale-105 border-orange-600/20 shadow-2xl shadow-orange-600/5'}`}>
+                                                <div className="w-12 h-12 rounded-2xl bg-orange-600/10 flex items-center justify-center text-orange-500 mb-6">
+                                                    {plan.price === 0 ? <Star size={24}/> : <Crown size={24}/>}
+                                                </div>
+                                                <h4 className="text-xl font-black uppercase text-white mb-2">{plan.name}</h4>
+                                                <p className="text-4xl font-black text-white mb-6">
+                                                    <span className="text-sm font-bold align-top">R$</span> {plan.price.toFixed(2)}
+                                                </p>
+                                                <p className="text-xs text-gray-400 mb-8 leading-relaxed">{plan.description}</p>
+                                                <button onClick={() => setCurrentView('REGISTER')} className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 hover:bg-orange-600 hover:border-transparent text-white text-[11px] font-black uppercase transition-all">
+                                                    Começar agora
+                                                </button>
                                             </div>
-                                            <h4 className="text-xl font-black uppercase text-white mb-2">{plan.name}</h4>
-                                            <p className="text-4xl font-black text-white mb-6">
-                                                <span className="text-sm font-bold align-top">R$</span> {plan.price.toFixed(2)}
-                                            </p>
-                                            <p className="text-xs text-gray-400 mb-8 leading-relaxed">{plan.description}</p>
-                                            <button onClick={() => setCurrentView('REGISTER')} className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 hover:bg-orange-600 hover:border-transparent text-white text-[11px] font-black uppercase transition-all">
-                                                Começar agora
-                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="col-span-1 md:col-span-3 text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10">
+                                            <p className="opacity-30 italic font-black uppercase text-[10px] tracking-widest">Nenhum plano disponível no momento...</p>
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
                             </div>
                         </section>
@@ -487,6 +507,19 @@ export const App: React.FC = () => {
                                             <label className="text-[9px] font-black uppercase text-gray-500">Telefone Contato</label>
                                             <input value={siteConfig.phone} onChange={e => setSiteConfig({...siteConfig, phone: e.target.value})} placeholder="TELEFONE" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none focus:border-orange-500" />
                                         </div>
+                                    </div>
+
+                                    <div className="pt-6">
+                                        <label className="flex items-center justify-between p-5 rounded-2xl bg-white/5 border border-white/10 cursor-pointer">
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] font-black uppercase text-white">Modo Manutenção</p>
+                                                <p className="text-[9px] font-bold text-gray-500 uppercase">Ative para bloquear o acesso de visitantes ao site.</p>
+                                            </div>
+                                            <div onClick={() => setSiteConfig(prev => ({ ...prev, maintenanceMode: !prev.maintenanceMode }))} 
+                                                 className={`w-14 h-8 rounded-full flex items-center transition-colors ${siteConfig.maintenanceMode ? 'bg-orange-600 justify-end' : 'bg-gray-600 justify-start'}`}>
+                                                <span className="w-6 h-6 bg-white rounded-full block mx-1 transform transition-transform" />
+                                            </div>
+                                        </label>
                                     </div>
 
                                     <Button onClick={async () => { 
