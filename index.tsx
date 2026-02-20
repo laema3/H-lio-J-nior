@@ -9,7 +9,7 @@ import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { ChatBot } from './components/ChatBot';
 import { 
-    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Crown, ArrowRight, Ban
+    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Crown, ArrowRight, Ban, Sparkles
 } from 'lucide-react';
 
 const SESSION_KEY = 'helio_junior_vip_session_v10';
@@ -235,13 +235,351 @@ const App: React.FC = () => {
 
                 {currentView === 'DASHBOARD' && currentUser && (
                    <div className="pt-24 pb-32 max-w-7xl mx-auto px-6">
-                        <h2 className="text-3xl font-black text-white uppercase mb-8">Olá, {currentUser.name}</h2>
-                        <Button onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
-                             <PlusCircle size={20}/> Criar Novo Anúncio
-                        </Button>
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-12 border-b border-white/5 pb-8">
+                            <div className="flex items-center gap-6">
+                                <div className="w-16 h-16 bg-orange-600 rounded-[20px] flex items-center justify-center text-white font-black text-2xl shadow-xl">{currentUser.name[0]}</div>
+                                <div>
+                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">{currentUser.name}</h2>
+                                    <div className="flex items-center gap-4 mt-2">
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-orange-600/10 border border-orange-600/30 rounded-full">
+                                            <Clock size={10} className="text-orange-500 animate-pulse" />
+                                            <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest">{planCountdown}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <Button className="h-14 px-8 rounded-2xl" onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
+                                <PlusCircle size={20}/> Criar Anúncio
+                            </Button>
+                        </div>
+
+                        <div className="glass-panel rounded-[35px] p-8 border-orange-600/20 mb-12 shadow-3xl bg-orange-600/[0.02]">
+                             <div className="flex items-center gap-4 mb-6">
+                                <div className="w-10 h-10 bg-orange-600/20 rounded-xl flex items-center justify-center text-orange-500"><Mic size={20}/></div>
+                                <h3 className="text-xl font-black uppercase text-white tracking-tighter">Locutor Virtual IA</h3>
+                             </div>
+                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="lg:col-span-2">
+                                    <textarea value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="O que você quer vender? Digite aqui..." className="w-full bg-brand-dark border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 min-h-[100px] text-sm" />
+                                </div>
+                                <div className="space-y-3">
+                                    <Button className="w-full h-14 uppercase font-black text-[10px]" onClick={async () => {
+                                        setIsGeneratingAi(true);
+                                        try {
+                                          const res = await generateAdCopy(selectedCategory, magicPrompt, 'short');
+                                          const data = typeof res === 'object' ? res : { title: 'Oferta VIP', content: res };
+                                          setEditingPost({ title: data.title, content: data.content, category: selectedCategory, imageUrls: [] });
+                                        } finally { setIsGeneratingAi(false); }
+                                    }} isLoading={isGeneratingAi}><Zap size={16}/> Gerar Texto VIP</Button>
+                                </div>
+                             </div>
+                        </div>
+
+                        <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios</h3>
+                        {userPosts.length === 0 ? (
+                            <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10 opacity-30">Você ainda não criou nenhum anúncio.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {userPosts.map(p => (
+                                    <div key={p.id} className="relative group">
+                                        <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                            <button onClick={() => setEditingPost(p)} className="p-3 bg-orange-600 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
+                                            <button onClick={async () => { if(confirm('Deseja excluir definitivamente este anúncio?')) { await db.deletePost(p.id); refreshData(); showToast("Excluído"); } }} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
+                                        </div>
+                                        <PostCard post={p} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                    </div>
                 )}
+
+                {currentView === 'ADMIN' && currentUser?.role === UserRole.ADMIN && (
+                    <div className="flex flex-col md:flex-row min-h-screen pt-20">
+                        <aside className="w-full md:w-80 border-r border-white/5 p-8 space-y-3">
+                            <h3 className="text-[9px] font-black uppercase text-orange-500 tracking-[0.4em] mb-10 pl-2">Controle Mestre</h3>
+                            {[
+                                { id: 'INICIO', label: 'Resumo Geral', icon: LayoutDashboard },
+                                { id: 'ANUNCIOS', label: 'Todos Anúncios', icon: Layers },
+                                { id: 'PLANOS', label: 'Gestão Planos', icon: CreditCard },
+                                { id: 'CLIENTES', label: 'Gestão Clientes', icon: Users },
+                                { id: 'AJUSTES', label: 'Identidade Site', icon: Settings },
+                            ].map(item => (
+                                <button key={item.id} onClick={() => setAdminSubView(item.id)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${adminSubView === item.id ? 'bg-orange-600 text-white shadow-xl' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+                                    <item.icon size={18} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
+                                </button>
+                            ))}
+                        </aside>
+                        
+                        <main className="flex-1 p-8 lg:p-12">
+                            {adminSubView === 'INICIO' && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Total Assinantes</p>
+                                        <h4 className="text-5xl font-black text-orange-500">{allUsers.length}</h4>
+                                    </div>
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Anúncios Totais</p>
+                                        <h4 className="text-5xl font-black text-white">{posts.length}</h4>
+                                    </div>
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Planos Criados</p>
+                                        <h4 className="text-5xl font-black text-white">{plans.length}</h4>
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'PLANOS' && (
+                                <div className="space-y-8">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Configuração de Planos</h3>
+                                        <Button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })}><PlusCircle size={18}/> Novo Plano</Button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {plans.map(pl => (
+                                            <div key={pl.id} className="glass-panel p-6 rounded-2xl flex justify-between items-center">
+                                                <div>
+                                                    <h4 className="text-lg font-black text-white uppercase">{pl.name}</h4>
+                                                    <p className="text-[10px] text-gray-500 font-bold">R$ {pl.price.toFixed(2)} | {pl.durationDays} DIAS</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => setEditingPlan(pl)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-orange-600"><Edit size={16}/></button>
+                                                    <button onClick={async () => { if(confirm('Excluir este plano?')) { await db.deletePlan(pl.id); refreshData(); } }} className="p-3 bg-white/5 rounded-xl text-red-500 hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'ANUNCIOS' && (
+                                <div className="space-y-8">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Todos os Anúncios do Portal</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {posts.map(p => (
+                                            <div key={p.id} className="relative group">
+                                                <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <button onClick={() => setEditingPost(p)} className="p-2 bg-orange-600 rounded-lg text-white"><Edit size={14}/></button>
+                                                    <button onClick={async () => { if(confirm('Remover este anúncio do portal?')) { await db.deletePost(p.id); refreshData(); showToast("Removido"); } }} className="p-2 bg-red-600 rounded-lg text-white"><Trash2 size={14}/></button>
+                                                </div>
+                                                <PostCard post={p} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'CLIENTES' && (
+                                <div className="space-y-8">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Assinantes VIP</h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead>
+                                                <tr className="border-b border-white/5 text-[9px] font-black uppercase text-gray-500 tracking-widest">
+                                                    <th className="p-4">Nome</th>
+                                                    <th className="p-4">WhatsApp</th>
+                                                    <th className="p-4">Status</th>
+                                                    <th className="p-4 text-right">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-[10px] font-bold text-gray-300">
+                                                {allUsers.map(u => (
+                                                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                                        <td className="p-4">{u.name}</td>
+                                                        <td className="p-4">{u.phone}</td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${u.status === 'BLOCKED' ? 'bg-red-600/10 text-red-500' : 'bg-green-600/10 text-green-500'}`}>
+                                                                {u.status === 'BLOCKED' ? 'Bloqueado' : 'Ativo'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 flex justify-end gap-2">
+                                                            <button onClick={() => setEditingUser(u)} className="p-2 bg-white/5 rounded-lg text-white hover:bg-orange-600"><Edit size={14}/></button>
+                                                            <button onClick={async () => { 
+                                                                const newStatus = u.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
+                                                                if(confirm(`${u.status === 'BLOCKED' ? 'Desbloquear' : 'Bloquear'} este cliente?`)) { 
+                                                                    await db.updateUser({...u, status: newStatus}); 
+                                                                    refreshData(); 
+                                                                } 
+                                                            }} className={`p-2 bg-white/5 rounded-lg transition-all ${u.status === 'BLOCKED' ? 'text-green-500 hover:bg-green-600 hover:text-white' : 'text-red-500 hover:bg-red-600 hover:text-white'}`}>
+                                                                <Ban size={14}/>
+                                                            </button>
+                                                            <button onClick={async () => { if(confirm('Excluir este cliente definitivamente?')) { await db.deleteUser(u.id); refreshData(); } }} className="p-2 bg-white/5 rounded-lg text-white hover:bg-red-600"><Trash2 size={14}/></button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'AJUSTES' && (
+                                <div className="max-w-4xl space-y-10">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Identidade Visual do Portal</h3>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="space-y-4">
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Logo do Topo</label>
+                                            <div onClick={() => document.getElementById('upLogoT')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
+                                                {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={24} className="text-gray-600" />}
+                                                <input id="upLogoT" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, headerLogoUrl: arr[0]}), false)} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Banner Principal</label>
+                                            <div onClick={() => document.getElementById('upBanner')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
+                                                {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
+                                                <input id="upBanner" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, heroImageUrl: arr[0]}), false)} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Imagem Rodapé</label>
+                                            <div onClick={() => document.getElementById('upFooter')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
+                                                {siteConfig.bannerFooterUrl ? <img src={siteConfig.bannerFooterUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
+                                                <input id="upFooter" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, bannerFooterUrl: arr[0]}), false)} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[9px] font-black uppercase text-gray-500">WhatsApp Oficial</label>
+                                            <input value={siteConfig.whatsapp} onChange={e => setSiteConfig({...siteConfig, whatsapp: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none focus:border-orange-500" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Telefone Contato</label>
+                                            <input value={siteConfig.phone} onChange={e => setSiteConfig({...siteConfig, phone: e.target.value})} placeholder="TELEFONE" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none focus:border-orange-500" />
+                                        </div>
+                                    </div>
+
+                                    <Button onClick={async () => { 
+                                        setIsSaving(true);
+                                        try {
+                                            await db.updateConfig(siteConfig); 
+                                            showToast("Identidade Visual Atualizada!"); 
+                                            await refreshData(); 
+                                        } catch (e) {
+                                            showToast("Erro ao salvar no banco. Tente fotos menores.", "error");
+                                        } finally {
+                                            setIsSaving(false);
+                                        }
+                                    }} isLoading={isSaving} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Identidade</Button>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                )}
             </main>
+
+            {editingPost && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300 overflow-y-auto">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault(); setIsSaving(true);
+                        try {
+                            const expiresAt = new Date();
+                            expiresAt.setDate(expiresAt.getDate() + 7); 
+                            await db.savePost({ 
+                                ...editingPost, 
+                                authorId: editingPost.authorId || currentUser?.id, 
+                                authorName: editingPost.authorName || currentUser?.name, 
+                                whatsapp: editingPost.whatsapp || currentUser?.phone, 
+                                phone: editingPost.phone || currentUser?.phone,
+                                expiresAt: editingPost.expiresAt || expiresAt.toISOString(),
+                                createdAt: editingPost.createdAt || new Date().toISOString()
+                            });
+                            refreshData(); setEditingPost(null);
+                            showToast("Anúncio Publicado!");
+                        } catch (e) {
+                            showToast("Falha ao salvar. Tente reduzir as fotos.", "error");
+                        } finally { setIsSaving(false); }
+                    }} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
+                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter text-center">Configurar Anúncio VIP</h3>
+                        <div className="space-y-4">
+                            <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} placeholder="TÍTULO CHAMATIVO" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" required />
+                            
+                            <div className="relative">
+                                <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="DESCRIÇÃO DO SEU ANÚNCIO" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm pr-16" required />
+                                <button 
+                                    type="button" 
+                                    title="Gerar descrição com IA"
+                                    onClick={async () => {
+                                        if(!editingPost.title) return showToast("Digite um título primeiro", "error");
+                                        setIsGeneratingAi(true);
+                                        try {
+                                            const copy = await generateAdCopy(editingPost.category || 'Vendas', editingPost.title, 'short');
+                                            setEditingPost({ ...editingPost, content: typeof copy === 'object' ? copy.content : copy });
+                                            showToast("Descrição gerada!");
+                                        } finally { setIsGeneratingAi(false); }
+                                    }}
+                                    className="absolute right-4 top-4 p-2 bg-orange-600/20 text-orange-500 rounded-xl hover:bg-orange-600 hover:text-white transition-all border border-orange-600/30"
+                                >
+                                    {isGeneratingAi ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                                </button>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="bg-brand-dark border border-white/10 p-5 rounded-2xl text-white uppercase font-black text-[10px]">
+                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                </select>
+                                <div className="space-y-2">
+                                    <button type="button" onClick={() => document.getElementById('adUpV7')?.click()} className="w-full p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl text-white font-black text-[10px] uppercase hover:bg-white/10 flex items-center justify-center gap-3">
+                                        <ImageIcon size={18}/> {editingPost.imageUrls?.length ? `${editingPost.imageUrls.length} Fotos Adicionadas` : 'Enviar Fotos (Máx 5)'}
+                                    </button>
+                                    <input id="adUpV7" type="file" multiple className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, imageUrls: arr}))} />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex gap-4">
+                            <Button type="submit" className="flex-1 h-14 rounded-2xl" isLoading={isSaving}>Publicar Anúncio</Button>
+                            <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500">Fechar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {editingPlan && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault(); setIsSaving(true);
+                        try {
+                            await db.savePlan(editingPlan);
+                            refreshData(); setEditingPlan(null); showToast("Plano Salvo!");
+                        } finally { setIsSaving(false); }
+                    }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white text-center">Configurar Plano</h3>
+                        <input value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} placeholder="NOME DO PLANO" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <div className="grid grid-cols-2 gap-4">
+                            <input value={editingPlan.price} type="number" step="0.01" onChange={e => setEditingPlan({...editingPlan, price: parseFloat(e.target.value)})} placeholder="VALOR R$" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                            <input value={editingPlan.durationDays} type="number" onChange={e => setEditingPlan({...editingPlan, durationDays: parseInt(e.target.value)})} placeholder="DIAS DE PRAZO" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        </div>
+                        <div className="flex gap-4">
+                            <Button type="submit" className="flex-1" isLoading={isSaving}>Salvar</Button>
+                            <button type="button" onClick={() => setEditingPlan(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {editingUser && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault(); setIsSaving(true);
+                        try {
+                            await db.updateUser(editingUser as User);
+                            refreshData(); setEditingUser(null); showToast("Cliente Atualizado!");
+                        } finally { setIsSaving(false); }
+                    }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white text-center">Editar Cliente</h3>
+                        <input value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} placeholder="NOME" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <input value={editingUser.phone} onChange={e => setEditingUser({...editingUser, phone: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <div className="flex gap-4">
+                            <Button type="submit" className="flex-1" isLoading={isSaving}>Atualizar</Button>
+                            <button type="button" onClick={() => setEditingUser(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             <footer className="bg-brand-panel border-t border-white/5 pt-16 pb-10 mt-auto">
                 <div className="max-w-7xl mx-auto px-6">

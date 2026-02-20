@@ -44,32 +44,47 @@ const cleanId = (id: any): any => {
 };
 
 /**
- * Função utilitária para tentar o upsert de forma recursiva removendo colunas inexistentes.
+ * Função utilitária aprimorada para tentar o upsert removendo colunas inexistentes de forma agressiva.
  */
 async function resilientUpsert(table: string, payload: any, attempt = 1): Promise<void> {
     if (missingTables.has(table)) return;
-    if (attempt > 10) return;
+    if (attempt > 15) return; // Aumentado limite de tentativas
 
     const { error } = await supabase.from(table).upsert(payload);
 
     if (error) {
+        // Tabela inexistente
         if (error.code === 'PGRST116' || error.message.includes('not found') || (error as any).status === 404) {
-            console.warn(`Tabela '${table}' não encontrada no Supabase. Usando modo offline para esta tabela.`);
+            console.warn(`Tabela '${table}' não encontrada no Supabase.`);
             missingTables.add(table);
             return;
         }
 
+        // Coluna inexistente
         if (error.code === 'PGRST204' || error.message.includes('column') || error.message.includes('not found')) {
             const match = error.message.match(/'([^']+)'/);
             const missingCol = match ? match[1] : null;
 
             if (missingCol && payload.hasOwnProperty(missingCol)) {
-                console.warn(`Coluna '${missingCol}' ausente na tabela '${table}'. Removendo e tentando novamente (Tentativa ${attempt})...`);
+                console.warn(`Coluna '${missingCol}' ausente em '${table}'. Tentativa ${attempt}.`);
                 const newPayload = { ...payload };
                 delete newPayload[missingCol];
                 return resilientUpsert(table, newPayload, attempt + 1);
+            } else {
+              // Se o erro de coluna persiste mas não identificamos o nome, tentamos remover campos comuns que costumam falhar
+              const commonProblemFields = ['bannerfooterurl', 'authorid', 'authorname', 'createdat', 'expiresat', 'imageurls', 'status'];
+              let modified = false;
+              const newPayload = { ...payload };
+              for(const f of commonProblemFields) {
+                if(newPayload.hasOwnProperty(f)) {
+                  delete newPayload[f];
+                  modified = true;
+                }
+              }
+              if(modified) return resilientUpsert(table, newPayload, attempt + 1);
             }
         }
+        console.error(`Erro fatal no Supabase (${table}):`, error.message);
     }
 }
 
@@ -103,37 +118,28 @@ export const db = {
 
     try {
       const { data, error } = await supabase.from('site_config').select('*').eq('id', 1).maybeSingle();
-      
-      if (error) {
-          if (error.message.includes('not found') || (error as any).status === 404) {
-              missingTables.add('site_config');
-          }
-          return fallback;
-      }
-      
-      if (!data) return fallback;
+      if (error || !data) return fallback;
       
       return {
         heroLabel: data.herolabel || data.hero_label || fallback.heroLabel,
         heroTitle: data.herotitle || data.hero_title || fallback.heroTitle,
         heroSubtitle: data.herosubtitle || data.hero_subtitle || fallback.heroSubtitle,
         heroImageUrl: data.heroimageurl || data.hero_image_url || fallback.heroImageUrl,
-        headerLogoUrl: data.headerlogourl || data.header_logo_url || data.logo_url,
+        headerLogoUrl: data.headerlogourl || data.header_logo_url,
         bannerFooterUrl: data.bannerfooterurl || data.banner_footer_url,
         whatsapp: data.whatsapp,
         phone: data.phone,
         instagram: data.instagram,
         facebook: data.facebook,
-        pixKey: data.pixkey || data.pix_key,
-        pixName: data.pixname || data.pix_name
+        pixKey: data.pixkey,
+        pixName: data.pixname
       };
     } catch { return fallback; }
   },
 
   async updateConfig(cfg: SiteConfig) {
     saveLocal(STORAGE_KEYS.CONFIG, cfg);
-    
-    const payload: any = {
+    const payload = {
       id: 1,
       herolabel: cfg.heroLabel,
       herotitle: cfg.heroTitle,
@@ -144,27 +150,17 @@ export const db = {
       whatsapp: cfg.whatsapp,
       phone: cfg.phone,
       instagram: cfg.instagram,
-      facebook: cfg.facebook,
-      pixkey: cfg.pixKey,
-      pixname: cfg.pixName
+      facebook: cfg.facebook
     };
-
     await resilientUpsert('site_config', payload);
   },
 
   async getPlans(): Promise<Plan[]> {
     const local = getLocal(STORAGE_KEYS.PLANS, []);
     if (missingTables.has('plans')) return local;
-
     try {
-      const { data, error } = await supabase.from('plans').select('*').order('price');
-      if (error) {
-          if (error.message.includes('not found') || (error as any).status === 404) {
-              missingTables.add('plans');
-          }
-          return local;
-      }
-      if (!data) return local;
+      const { data, error } = await supabase.from('plans').select('*');
+      if (error || !data) return local;
       return data.map(p => ({
         id: String(p.id),
         name: p.name,
@@ -180,70 +176,33 @@ export const db = {
     const newId = plan.id || String(Date.now());
     const newPlan = { ...plan, id: newId } as Plan;
     saveLocal(STORAGE_KEYS.PLANS, plans.some(p => p.id === newId) ? plans.map(p => p.id === newId ? newPlan : p) : [...plans, newPlan]);
-    
-    const payload = {
-      id: cleanId(newId),
-      name: newPlan.name,
-      price: newPlan.price,
-      durationdays: newPlan.durationDays,
-      description: newPlan.description
-    };
-    await resilientUpsert('plans', payload);
+    await resilientUpsert('plans', { id: cleanId(newId), name: newPlan.name, price: newPlan.price, durationdays: newPlan.durationDays, description: newPlan.description });
   },
 
   async deletePlan(id: string) {
     const plans = await this.getPlans();
     saveLocal(STORAGE_KEYS.PLANS, plans.filter(p => p.id !== id));
-    if (missingTables.has('plans')) return;
     try { await supabase.from('plans').delete().eq('id', cleanId(id)); } catch(e) {}
   },
 
   async getUsers(): Promise<User[]> {
     const local = getLocal(STORAGE_KEYS.USERS, []);
     if (missingTables.has('profiles')) return local;
-
     try {
       const { data, error } = await supabase.from('profiles').select('*');
-      if (error) {
-          if (error.message.includes('not found') || (error as any).status === 404) {
-              missingTables.add('profiles');
-          }
-          return local;
-      }
-      if (!data) return local;
-      return data.map(u => ({
-        ...u,
-        id: String(u.id),
-        planId: u.planid || u.plan_id,
-        paymentStatus: (u.paymentstatus || u.payment_status) as PaymentStatus,
-        role: (u.role || UserRole.ADVERTISER) as UserRole,
-        status: u.status || 'ACTIVE'
-      }));
+      if (error || !data) return local;
+      return data.map(u => ({ ...u, id: String(u.id), role: (u.role || UserRole.ADVERTISER) as UserRole, status: u.status || 'ACTIVE' }));
     } catch { return local; }
   },
 
   async authenticate(email: string, pass: string): Promise<User | null> {
-    const local = getLocal(STORAGE_KEYS.USERS, []);
-    const found = local.find((u: any) => u.email.toLowerCase() === email.toLowerCase() && u.password === pass);
-    if (found) return found.status === 'BLOCKED' ? null : found;
-
-    if (missingTables.has('profiles')) return null;
-
+    // FIX: Using await this.getUsers() to reference the method correctly within the db object.
+    const local = (await this.getUsers()).find((u: any) => u.email.toLowerCase() === email.toLowerCase() && u.password === pass);
+    if (local) return local.status === 'BLOCKED' ? null : local;
     try {
-      const { data, error } = await supabase.from('profiles')
-        .select('*')
-        .eq('email', email.toLowerCase())
-        .eq('password', pass)
-        .maybeSingle();
-        
+      const { data, error } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).eq('password', pass).maybeSingle();
       if (error || !data || data.status === 'BLOCKED') return null;
-      
-      return { 
-        ...data, 
-        id: String(data.id), 
-        role: data.role as UserRole,
-        planId: data.planid || data.plan_id
-      };
+      return { ...data, id: String(data.id), role: data.role as UserRole };
     } catch { return null; }
   },
 
@@ -252,62 +211,29 @@ export const db = {
     const newId = String(Date.now());
     const newUser = { ...user, id: newId, createdAt: new Date().toISOString(), status: 'ACTIVE' } as User;
     saveLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-    
-    const payload = {
-      id: cleanId(newId),
-      name: newUser.name,
-      email: newUser.email,
-      password: newUser.password,
-      phone: newUser.phone,
-      role: newUser.role,
-      status: 'ACTIVE',
-      createdat: newUser.createdAt
-    };
-    await resilientUpsert('profiles', payload);
+    await resilientUpsert('profiles', { id: cleanId(newId), name: newUser.name, email: newUser.email, password: newUser.password, phone: newUser.phone, role: newUser.role, status: 'ACTIVE' });
     return newUser;
   },
 
   async updateUser(user: User) {
     const users = await this.getUsers();
     saveLocal(STORAGE_KEYS.USERS, users.map(u => u.id === user.id ? user : u));
-    
-    const { id } = user;
-    const payload: any = { id: cleanId(id) };
-    if (user.name) payload.name = user.name;
-    if (user.status) payload.status = user.status;
-    if (user.role) payload.role = user.role;
-    if (user.phone) payload.phone = user.phone;
-    if (user.email) payload.email = user.email;
-    
-    await resilientUpsert('profiles', payload);
+    await resilientUpsert('profiles', { id: cleanId(user.id), name: user.name, status: user.status, role: user.role, phone: user.phone, email: user.email });
   },
 
   async deleteUser(id: string) {
     const users = await this.getUsers();
     saveLocal(STORAGE_KEYS.USERS, users.filter(u => u.id !== id));
-    if (missingTables.has('profiles')) return;
     try { await supabase.from('profiles').delete().eq('id', cleanId(id)); } catch(e) {}
   },
 
   async getPosts(): Promise<Post[]> {
     const local = getLocal(STORAGE_KEYS.POSTS, []);
     if (missingTables.has('posts')) return local;
-
     try {
       const { data, error } = await supabase.from('posts').select('*').order('id', { ascending: false });
-      if (error) {
-          if (error.message.includes('not found') || (error as any).status === 404) {
-              missingTables.add('posts');
-          }
-          return local;
-      }
-      if (!data) return local;
-      return data.map(p => ({
-        ...p,
-        id: String(p.id),
-        authorId: String(p.authorid || p.author_id),
-        imageUrls: p.imageurls || p.image_urls || []
-      }));
+      if (error || !data) return local;
+      return data.map(p => ({ ...p, id: String(p.id), imageUrls: p.imageurls || [] }));
     } catch { return local; }
   },
 
@@ -316,7 +242,8 @@ export const db = {
     const newId = post.id || String(Date.now());
     const newPost = { ...post, id: newId, createdAt: post.createdAt || new Date().toISOString() } as Post;
     saveLocal(STORAGE_KEYS.POSTS, posts.some(p => p.id === newId) ? posts.map(p => p.id === newId ? newPost : p) : [newPost, ...posts]);
-
+    
+    // Payload otimizado: se uma coluna falhar, o resilientUpsert a remove e tenta salvar o resto
     const payload = {
       id: cleanId(newId),
       title: newPost.title,
@@ -336,23 +263,15 @@ export const db = {
   async deletePost(id: string) {
     const posts = await this.getPosts();
     saveLocal(STORAGE_KEYS.POSTS, posts.filter(p => p.id !== id));
-    if (missingTables.has('posts')) return;
     try { await supabase.from('posts').delete().eq('id', cleanId(id)); } catch(e) {}
   },
 
   async getCategories(): Promise<Category[]> {
-    const local = getLocal(STORAGE_KEYS.CATEGORIES, []);
+    const local = getLocal(STORAGE_KEYS.CATEGORIES, [{id:'1', name:'Comércio'}, {id:'2', name:'Serviços'}, {id:'3', name:'Alimentação'}]);
     if (missingTables.has('categories')) return local;
-
     try {
-      const { data, error } = await supabase.from('categories').select('*').order('name');
-      if (error) {
-          if (error.message.includes('not found') || (error as any).status === 404) {
-              missingTables.add('categories');
-          }
-          return local;
-      }
-      if (!data) return local;
+      const { data, error } = await supabase.from('categories').select('*');
+      if (error || !data) return local;
       return data.map(c => ({ id: String(c.id), name: c.name }));
     } catch { return local; }
   }
