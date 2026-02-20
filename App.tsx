@@ -54,7 +54,7 @@ export const App: React.FC = () => {
 
     const showToast = useCallback((m: string, t: 'success' | 'error' = 'success') => {
         setToast({ m, t });
-        setTimeout(() => setToast(null), 3000);
+        setTimeout(() => setToast(null), 4000);
     }, []);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64Array: string[]) => void, multiple = true) => {
@@ -64,6 +64,11 @@ export const App: React.FC = () => {
         if (files.length === 0) return;
 
         files.forEach(file => {
+            // Verifica tamanho do arquivo (máx 2MB por foto para não estourar storage)
+            if (file.size > 2 * 1024 * 1024) {
+                showToast(`Foto ${file.name} muito grande. Use fotos menores que 2MB.`, 'error');
+                return;
+            }
             const reader = new FileReader();
             reader.onloadend = () => {
                 results.push(reader.result as string);
@@ -123,7 +128,6 @@ export const App: React.FC = () => {
         setCurrentView('HOME');
     };
 
-    // Filtro crucial: Assinante vê apenas os seus, Admin vê todos no subview específico.
     const userPosts = useMemo(() => {
         if (!currentUser) return [];
         if (currentUser.role === UserRole.ADMIN) return posts;
@@ -135,10 +139,8 @@ export const App: React.FC = () => {
             <Navbar currentUser={currentUser} setCurrentView={setCurrentView} currentView={currentView} onLogout={handleLogout} config={siteConfig} isOnline={!isLoadingData} />
             
             <main className="flex-1">
-                {/* HOME - MANTIDA INTACTA */}
                 {currentView === 'HOME' && (
                     <div className="animate-in fade-in duration-700">
-                        {/* Hero */}
                         <section className="pt-24 pb-8 lg:pt-28 lg:pb-10 px-6">
                             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
                                 <div className="space-y-5 text-center lg:text-left">
@@ -163,7 +165,6 @@ export const App: React.FC = () => {
                             </div>
                         </section>
 
-                        {/* Ads Section */}
                         <section id="ads" className="max-w-7xl mx-auto px-6 py-10">
                             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
                                 <div>
@@ -188,7 +189,6 @@ export const App: React.FC = () => {
                             )}
                         </section>
 
-                        {/* Plans Section */}
                         <section className="bg-white/[0.02] border-y border-white/5 py-16 px-6">
                             <div className="max-w-7xl mx-auto">
                                 <div className="text-center mb-16">
@@ -217,7 +217,6 @@ export const App: React.FC = () => {
                     </div>
                 )}
 
-                {/* LOGIN / REGISTER */}
                 {(currentView === 'LOGIN' || currentView === 'REGISTER') && (
                     <div className="min-h-screen flex items-center justify-center p-6 bg-brand-dark pt-16">
                         <div className="glass-panel p-10 md:p-14 rounded-[50px] w-full max-w-xl text-center shadow-3xl border-orange-600/10">
@@ -269,7 +268,6 @@ export const App: React.FC = () => {
                     </div>
                 )}
 
-                {/* PAINEL DO ASSINANTE */}
                 {currentView === 'DASHBOARD' && currentUser && (
                    <div className="pt-24 pb-32 max-w-7xl mx-auto px-6">
                         <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-12 border-b border-white/5 pb-8">
@@ -290,7 +288,6 @@ export const App: React.FC = () => {
                             </Button>
                         </div>
 
-                        {/* IA Section */}
                         <div className="glass-panel rounded-[35px] p-8 border-orange-600/20 mb-12 shadow-3xl bg-orange-600/[0.02]">
                              <div className="flex items-center gap-4 mb-6">
                                 <div className="w-10 h-10 bg-orange-600/20 rounded-xl flex items-center justify-center text-orange-500"><Mic size={20}/></div>
@@ -332,7 +329,6 @@ export const App: React.FC = () => {
                    </div>
                 )}
 
-                {/* PAINEL ADMINISTRATIVO */}
                 {currentView === 'ADMIN' && currentUser?.role === UserRole.ADMIN && (
                     <div className="flex flex-col md:flex-row min-h-screen pt-20">
                         <aside className="w-full md:w-80 border-r border-white/5 p-8 space-y-3">
@@ -352,7 +348,6 @@ export const App: React.FC = () => {
                         </aside>
                         
                         <main className="flex-1 p-8 lg:p-12">
-                            {/* Resumo */}
                             {adminSubView === 'INICIO' && (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
@@ -370,7 +365,6 @@ export const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Planos CRUD */}
                             {adminSubView === 'PLANOS' && (
                                 <div className="space-y-8">
                                     <div className="flex justify-between items-center">
@@ -394,7 +388,6 @@ export const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Anúncios Admin View */}
                             {adminSubView === 'ANUNCIOS' && (
                                 <div className="space-y-8">
                                     <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Todos os Anúncios do Portal</h3>
@@ -412,7 +405,6 @@ export const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Clientes CRUD */}
                             {adminSubView === 'CLIENTES' && (
                                 <div className="space-y-8">
                                     <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Assinantes VIP</h3>
@@ -457,38 +449,31 @@ export const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Identidade Visual */}
                             {adminSubView === 'AJUSTES' && (
                                 <div className="max-w-4xl space-y-10">
                                     <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Identidade Visual do Portal</h3>
-                                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest -mt-6">Recomendado formato paisagem (16:9) para todas as imagens.</p>
+                                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest -mt-6">Fotos maiores que 2MB podem não ser salvas devido a limitações técnicas.</p>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        {/* Logo Topo */}
                                         <div className="space-y-4">
-                                            <label className="text-[9px] font-black uppercase text-gray-500">Logo do Topo (Paisagem)</label>
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Logo do Topo</label>
                                             <div onClick={() => document.getElementById('upLogoT')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={24} className="text-gray-600" />}
                                                 <input id="upLogoT" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, headerLogoUrl: arr[0]}), false)} />
-                                                {siteConfig.headerLogoUrl && <button onClick={(e) => { e.stopPropagation(); if(confirm('Remover esta logo?')){setSiteConfig({...siteConfig, headerLogoUrl: ''});}}} className="absolute top-2 right-2 p-1 bg-red-600 rounded-md text-white"><X size={12}/></button>}
                                             </div>
                                         </div>
-                                        {/* Banner Hero */}
                                         <div className="space-y-4">
-                                            <label className="text-[9px] font-black uppercase text-gray-500">Banner Principal (Paisagem)</label>
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Banner Principal</label>
                                             <div onClick={() => document.getElementById('upBanner')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
                                                 <input id="upBanner" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, heroImageUrl: arr[0]}), false)} />
-                                                {siteConfig.heroImageUrl && <button onClick={(e) => { e.stopPropagation(); if(confirm('Remover este banner?')){setSiteConfig({...siteConfig, heroImageUrl: ''});}}} className="absolute top-2 right-2 p-1 bg-red-600 rounded-md text-white"><X size={12}/></button>}
                                             </div>
                                         </div>
-                                        {/* Imagem Rodapé */}
                                         <div className="space-y-4">
-                                            <label className="text-[9px] font-black uppercase text-gray-500">Imagem Rodapé (Paisagem)</label>
+                                            <label className="text-[9px] font-black uppercase text-gray-500">Imagem Rodapé</label>
                                             <div onClick={() => document.getElementById('upFooter')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.bannerFooterUrl ? <img src={siteConfig.bannerFooterUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
                                                 <input id="upFooter" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, bannerFooterUrl: arr[0]}), false)} />
-                                                {siteConfig.bannerFooterUrl && <button onClick={(e) => { e.stopPropagation(); if(confirm('Remover esta imagem?')){setSiteConfig({...siteConfig, bannerFooterUrl: ''});}}} className="absolute top-2 right-2 p-1 bg-red-600 rounded-md text-white"><X size={12}/></button>}
                                             </div>
                                         </div>
                                     </div>
@@ -504,7 +489,18 @@ export const App: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <Button onClick={async () => { await db.updateConfig(siteConfig); showToast("Identidade Visual Atualizada!"); refreshData(); }} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Todas as Alterações</Button>
+                                    <Button onClick={async () => { 
+                                        setIsSaving(true);
+                                        try {
+                                            await db.updateConfig(siteConfig); 
+                                            showToast("Identidade Visual Atualizada!"); 
+                                            await refreshData(); 
+                                        } catch (e) {
+                                            showToast("Erro ao salvar no banco. Tente fotos menores.", "error");
+                                        } finally {
+                                            setIsSaving(false);
+                                        }
+                                    }} isLoading={isSaving} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Identidade</Button>
                                 </div>
                             )}
                         </main>
@@ -512,7 +508,6 @@ export const App: React.FC = () => {
                 )}
             </main>
 
-            {/* MODAL PLANO */}
             {editingPlan && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
                     <form onSubmit={async (e) => {
@@ -536,7 +531,6 @@ export const App: React.FC = () => {
                 </div>
             )}
 
-            {/* MODAL CLIENTE */}
             {editingUser && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
                     <form onSubmit={async (e) => {
@@ -557,7 +551,6 @@ export const App: React.FC = () => {
                 </div>
             )}
 
-            {/* MODAL ANUNCIO (COM IA) */}
             {editingPost && (
                 <div className="fixed inset-0 z-[500] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300 overflow-y-auto">
                     <form onSubmit={async (e) => {
@@ -576,6 +569,8 @@ export const App: React.FC = () => {
                             });
                             refreshData(); setEditingPost(null);
                             showToast("Anúncio Publicado!");
+                        } catch (e) {
+                            showToast("Falha ao salvar. Tente reduzir as fotos.", "error");
                         } finally { setIsSaving(false); }
                     }} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
                         <h3 className="text-2xl font-black uppercase text-white tracking-tighter text-center">Criar Meu Anúncio VIP</h3>
@@ -603,7 +598,6 @@ export const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Footer */}
             <footer className="bg-brand-panel/60 border-t border-white/5 pt-16 pb-10 mt-auto">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
