@@ -126,15 +126,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   }, [audioSource]);
 
   return (
-    <div className="glass-panel bg-white rounded-[30px] overflow-hidden flex flex-col h-full border border-slate-100 group hover:border-orange-200 transition-all duration-500 shadow-md hover:shadow-xl">
-      <div className="relative aspect-[3/4] bg-slate-100 overflow-hidden">
+    <div className="glass-panel rounded-[30px] overflow-hidden flex flex-col h-full border border-white/5 group hover:border-orange-600/50 transition-all duration-500 shadow-2xl">
+      <div className="relative aspect-[3/4] bg-white/5 overflow-hidden">
         <img src={imageUrls[currentImgIndex]} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={post.title} />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-transparent to-transparent" />
         
         {imageUrls.length > 1 && (
             <>
-                <button onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length); }} className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-white/40 backdrop-blur-md rounded-full text-slate-900 opacity-0 group-hover:opacity-100 transition-all z-20"><ChevronLeft size={16}/></button>
-                <button onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(prev => (prev + 1) % imageUrls.length); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-white/40 backdrop-blur-md rounded-full text-slate-900 opacity-0 group-hover:opacity-100 transition-all z-20"><ChevronRight size={16}/></button>
+                <button onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length); }} className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-white/10 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-all z-20"><ChevronLeft size={16}/></button>
+                <button onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(prev => (prev + 1) % imageUrls.length); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-white/10 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-all z-20"><ChevronRight size={16}/></button>
             </>
         )}
 
@@ -146,9 +146,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         </button>
 
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur-md rounded-full border border-slate-100 shadow-sm">
-                <Clock size={11} className="text-orange-600 animate-pulse" />
-                <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{timeLeft}</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-dark/60 backdrop-blur-md rounded-full border border-white/10">
+                <Clock size={11} className="text-orange-500 animate-pulse" />
+                <span className="text-[9px] font-black text-white uppercase tracking-widest">{timeLeft}</span>
             </div>
             <div className="px-2.5 py-1.5 bg-orange-600 rounded-lg text-[8px] font-black uppercase text-white tracking-widest shadow-lg">
                 {post.category}
@@ -158,11 +158,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
       <div className="p-6 flex flex-col flex-grow">
         <div className="flex items-center gap-2 mb-2">
-          <Zap size={10} className="text-orange-600" />
-          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{post.authorName}</span>
+          <Zap size={10} className="text-orange-500" />
+          <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">{post.authorName}</span>
         </div>
-        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-3 leading-tight line-clamp-2">{post.title}</h3>
-        <p className="text-xs text-slate-500 mb-6 italic leading-relaxed line-clamp-3">"{post.content}"</p>
+        <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-3 leading-tight line-clamp-2">{post.title}</h3>
+        <p className="text-xs text-gray-400 mb-6 italic leading-relaxed line-clamp-3">"{post.content}"</p>
         
         <div className="grid grid-cols-2 gap-3 mt-auto">
           <button 
@@ -173,7 +173,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </button>
           <button 
             onClick={() => post.phone && window.open(`tel:${post.phone}`)} 
-            className="h-11 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl border border-slate-200 flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all active:scale-95"
+            className="h-11 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all active:scale-95"
           >
             <Phone size={14}/> Ligar
           </button>

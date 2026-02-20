@@ -11,9 +11,9 @@
   "dependencies": {
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "@google/genai": "^1.42.0",
-    "lucide-react": "^0.575.0",
-    "@supabase/supabase-js": "^2.97.0",
+    "@google/genai": "latest",
+    "lucide-react": "0.460.0",
+    "@supabase/supabase-js": "2.46.1",
     "firebase": "^12.9.0"
   },
   "devDependencies": {
