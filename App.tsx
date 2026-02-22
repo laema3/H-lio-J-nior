@@ -3,12 +3,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Navbar } from './components/Navbar';
 import { ViewState, User, UserRole, Post, PaymentStatus, SiteConfig, Plan, Category } from './types';
 import { db } from './services/supabase';
-import { Button } from './components/Button';
+
 import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { ChatBot } from './components/ChatBot';
 import { 
-    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Lock, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Instagram, Facebook, Crown, ArrowRight, Ban
+    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Phone, Image as ImageIcon, Zap, LayoutDashboard, Loader2, Send, Clock, Crown, ArrowRight, Ban
 } from 'lucide-react';
 
 const SESSION_KEY = 'helio_junior_vip_session_v9';
@@ -46,8 +46,6 @@ export const App: React.FC = () => {
     const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
     const [isGeneratingAi, setIsGeneratingAi] = useState(false);
     const [magicPrompt, setMagicPrompt] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('Comércio');
-
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
     const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
@@ -115,10 +113,10 @@ export const App: React.FC = () => {
     useEffect(() => { refreshData(); }, []);
 
     useEffect(() => {
-        if (siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN) {
+        if (currentUser?.role !== UserRole.ADMIN) {
             setCurrentView('HOME');
         }
-    }, [siteConfig.maintenanceMode, currentUser]);
+    }, [currentUser]);
 
     const planCountdown = useMemo(() => {
         if (!currentUser?.expiresAt) return null;
@@ -145,15 +143,7 @@ export const App: React.FC = () => {
             <Navbar currentUser={currentUser} setCurrentView={setCurrentView} currentView={currentView} onLogout={handleLogout} config={siteConfig} isOnline={!isLoadingData} />
             
             <main className="flex-1">
-                {siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-center p-10">
-                        <div className="glass-panel p-12 rounded-[40px] border-orange-500/20">
-                            <Shield size={60} className="text-orange-500 mx-auto mb-6"/>
-                            <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-4">Portal em Manutenção</h1>
-                            <p className="text-gray-400 max-w-md">Estamos realizando melhorias em nosso sistema. Voltamos em breve!</p>
-                        </div>
-                    </div>
-                ) : currentView === 'HOME' && (
+                {currentView === 'HOME' && (
                     <div className="animate-in fade-in duration-700">
                         <section className="pt-24 pb-8 lg:pt-28 lg:pb-10 px-6">
                             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
@@ -303,9 +293,9 @@ export const App: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <Button className="h-14 px-8 rounded-2xl" onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
+                            <button className="h-14 px-8 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
                                 <PlusCircle size={20}/> Criar Anúncio
-                            </Button>
+                            </button>
                         </div>
 
                         <div className="glass-panel rounded-[35px] p-8 border-orange-600/20 mb-12 shadow-3xl bg-orange-600/[0.02]">
@@ -318,14 +308,14 @@ export const App: React.FC = () => {
                                     <textarea value={magicPrompt} onChange={e => setMagicPrompt(e.target.value)} placeholder="O que você quer vender? Digite aqui..." className="w-full bg-brand-dark border border-white/10 p-5 rounded-[20px] text-white outline-none focus:border-orange-500 min-h-[100px] text-sm" />
                                 </div>
                                 <div className="space-y-3">
-                                    <Button className="w-full h-14 uppercase font-black text-[10px]" onClick={async () => {
+                                    <button className="w-full h-14 uppercase font-black text-[10px] bg-orange-600 text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={async () => {
                                         setIsGeneratingAi(true);
                                         try {
                                           const res = await generateAdCopy(selectedCategory, magicPrompt, 'short');
                                           const data = typeof res === 'object' ? res : { title: 'Oferta VIP', content: res };
                                           setEditingPost({ title: data.title, content: data.content, category: selectedCategory, imageUrls: [] });
                                         } finally { setIsGeneratingAi(false); }
-                                    }} isLoading={isGeneratingAi}><Zap size={16}/> Gerar Texto VIP</Button>
+                                    }} disabled={isGeneratingAi}><Zap size={16}/> {isGeneratingAi ? 'Gerando...' : 'Gerar Texto VIP'}</button>
                                 </div>
                              </div>
                         </div>
@@ -389,7 +379,7 @@ export const App: React.FC = () => {
                                 <div className="space-y-8">
                                     <div className="flex justify-between items-center">
                                         <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Configuração de Planos</h3>
-                                        <Button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })}><PlusCircle size={18}/> Novo Plano</Button>
+                                        <button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })} className="h-12 px-6 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-orange-700 transition-all"><PlusCircle size={18}/> Novo Plano</button>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {plans.map(pl => (
@@ -522,7 +512,7 @@ export const App: React.FC = () => {
                                         </label>
                                     </div>
 
-                                    <Button onClick={async () => { 
+                                    <button onClick={async () => { 
                                         setIsSaving(true);
                                         try {
                                             await db.updateConfig(siteConfig); 
@@ -533,7 +523,7 @@ export const App: React.FC = () => {
                                         } finally {
                                             setIsSaving(false);
                                         }
-                                    }} isLoading={isSaving} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Identidade</Button>
+                                    }} disabled={isSaving} className="w-full h-14 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-orange-700 transition-all"><Save size={18}/> {isSaving ? 'Salvando...' : 'Salvar Identidade'}</button>
                                 </div>
                             )}
                         </main>
@@ -557,7 +547,7 @@ export const App: React.FC = () => {
                             <input value={editingPlan.durationDays} type="number" onChange={e => setEditingPlan({...editingPlan, durationDays: parseInt(e.target.value)})} placeholder="DIAS DE PRAZO" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         </div>
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1" isLoading={isSaving}>Salvar Plano</Button>
+                            <button type="submit" className="flex-1 h-12 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Plano'}</button>
                             <button type="button" onClick={() => setEditingPlan(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>
@@ -577,7 +567,7 @@ export const App: React.FC = () => {
                         <input value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} placeholder="NOME" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         <input value={editingUser.phone} onChange={e => setEditingUser({...editingUser, phone: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1" isLoading={isSaving}>Atualizar</Button>
+                            <button type="submit" className="flex-1 h-12 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Atualizando...' : 'Atualizar'}</button>
                             <button type="button" onClick={() => setEditingUser(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>
@@ -624,7 +614,7 @@ export const App: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1 h-14 rounded-2xl" isLoading={isSaving}>Lançar Anúncio</Button>
+                            <button type="submit" className="flex-1 h-14 bg-orange-600 text-white rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Publicando...' : 'Lançar Anúncio'}</button>
                             <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500 hover:text-white transition-colors">Fechar</button>
                         </div>
                     </form>

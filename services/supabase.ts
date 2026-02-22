@@ -97,13 +97,17 @@ export const db = {
 
   async updateConfig(cfg: SiteConfig) {
     saveLocal(STORAGE_KEYS.CONFIG, cfg);
-    await resilientUpsert('site_config', {
-      id: 1,
-      herolabel: cfg.heroLabel,
-      herotitle: cfg.heroTitle,
-      herosubtitle: cfg.heroSubtitle,
-      maintenancemode: cfg.maintenanceMode
-    });
+    try {
+        await resilientUpsert('site_config', {
+            id: 1,
+            herolabel: cfg.heroLabel,
+            herotitle: cfg.heroTitle,
+            herosubtitle: cfg.heroSubtitle,
+            maintenancemode: cfg.maintenanceMode
+        });
+    } catch (e) {
+        console.error("Supabase updateConfig error:", e);
+    }
   },
 
   async getPlans(): Promise<Plan[]> {
@@ -112,7 +116,7 @@ export const db = {
       const { data, error } = await supabase.from('plans').select('*');
       if (error || !data || data.length === 0) return local;
       return data;
-    } catch { return local; }
+    } catch (e) { console.error("Supabase getPlans error:", e); return local; }
   },
 
   async savePlan(plan: Partial<Plan>) {
@@ -163,7 +167,7 @@ export const db = {
         if (data && !error) {
             return { ...data, id: String(data.id), role: data.role as UserRole };
         }
-    } catch (e) {}
+    } catch (e) { console.error("Supabase authentication error:", e); }
 
     return null;
   },

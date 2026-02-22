@@ -4,12 +4,12 @@ import { createRoot } from 'react-dom/client';
 import { Navbar } from './components/Navbar';
 import { ViewState, User, UserRole, Post, PaymentStatus, SiteConfig, Plan, Category } from './types';
 import { db } from './services/supabase';
-import { Button } from './components/Button';
+
 import { PostCard } from './components/PostCard';
 import { generateAdCopy } from './services/geminiService';
 import { ChatBot } from './components/ChatBot';
 import { 
-    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Mic, Star, Phone, Image as ImageIcon, Zap, LayoutDashboard, Shield, Loader2, Send, LogOut, Clock, Crown, ArrowRight, Ban, Sparkles, Hammer, Info, Eye, EyeOff, RefreshCw
+    Trash2, Edit, Users, Check, X, Settings, CreditCard, Layers, PlusCircle, Save, Radio, Phone, Image as ImageIcon, Zap, LayoutDashboard, Loader2, Send, Clock, Ban, Sparkles, Hammer, Eye, EyeOff, RefreshCw
 } from 'lucide-react';
 
 const SESSION_KEY = 'helio_junior_vip_session_v11';
@@ -163,7 +163,7 @@ const App: React.FC = () => {
         }
     };
 
-    if (siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN) {
+    if (siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN && currentView !== 'LOGIN' && currentView !== 'REGISTER') {
         return (
             <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center p-6 text-center">
                 <div className="glass-panel p-12 md:p-20 rounded-[50px] max-w-2xl border-orange-600/20 shadow-3xl animate-in fade-in zoom-in duration-500">
@@ -335,9 +335,9 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <Button className="h-14 px-8 rounded-2xl" onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
+                            <button className="h-14 px-8 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
                                 <PlusCircle size={20}/> Criar Anúncio
-                            </Button>
+                            </button>
                         </div>
 
                         <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios Publicados</h3>
@@ -399,7 +399,7 @@ const App: React.FC = () => {
                                 <div className="space-y-8">
                                     <div className="flex justify-between items-center">
                                         <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Configuração de Planos</h3>
-                                        <Button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })}><PlusCircle size={18}/> Novo Plano</Button>
+                                        <button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })} className="h-12 px-6 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-orange-700 transition-all"><PlusCircle size={18}/> Novo Plano</button>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {plans.map(pl => (
@@ -536,7 +536,7 @@ const App: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <Button onClick={async () => { 
+                                    <button onClick={async () => { 
                                         setIsSaving(true);
                                         try {
                                             await db.updateConfig(siteConfig); 
@@ -547,7 +547,7 @@ const App: React.FC = () => {
                                         } finally {
                                             setIsSaving(false);
                                         }
-                                    }} isLoading={isSaving} className="w-full h-14 rounded-2xl"><Save size={18}/> Salvar Todas as Alterações</Button>
+                                    }} disabled={isSaving} className="w-full h-14 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-orange-700 transition-all"><Save size={18}/> {isSaving ? 'Salvando...' : 'Salvar Todas as Alterações'}</button>
                                 </div>
                             )}
                         </main>
@@ -596,7 +596,7 @@ const App: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1 h-14 rounded-2xl" isLoading={isSaving}>{editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio'}</Button>
+                            <button type="submit" className="flex-1 h-14 bg-orange-600 text-white rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Publicando...' : (editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio')}</button>
                             <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>
@@ -619,7 +619,7 @@ const App: React.FC = () => {
                             <input value={editingPlan.durationDays} type="number" onChange={e => setEditingPlan({...editingPlan, durationDays: parseInt(e.target.value)})} placeholder="DIAS DE PRAZO" className="bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         </div>
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1" isLoading={isSaving}>Salvar</Button>
+                            <button type="submit" className="flex-1 h-12 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar'}</button>
                             <button type="button" onClick={() => setEditingPlan(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>
@@ -639,7 +639,7 @@ const App: React.FC = () => {
                         <input value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} placeholder="NOME" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         <input value={editingUser.phone} onChange={e => setEditingUser({...editingUser, phone: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         <div className="flex gap-4">
-                            <Button type="submit" className="flex-1" isLoading={isSaving}>Atualizar</Button>
+                            <button type="submit" className="flex-1 h-12 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Atualizando...' : 'Atualizar'}</button>
                             <button type="button" onClick={() => setEditingUser(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>

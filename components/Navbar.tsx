@@ -56,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
             {navItem('Início', 'HOME', currentView === 'HOME')}
             {!currentUser && (
               <>
-                {navItem('Entrar', 'LOGIN', currentView === 'LOGIN')}
+                {navItem('Acesso Restrito', 'LOGIN', currentView === 'LOGIN')}
                 <button
                     onClick={() => setCurrentView('REGISTER')}
                     className="ml-4 px-8 py-2.5 bg-orange-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-700 hover:shadow-xl shadow-orange-600/10 transition-all transform hover:-translate-y-0.5 active:scale-95"
@@ -92,7 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
             <button onClick={() => {setCurrentView('HOME'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest hover:bg-white/5 rounded-xl transition-all">Página Inicial</button>
             {!currentUser ? (
                 <>
-                    <button onClick={() => {setCurrentView('LOGIN'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest hover:bg-white/5 rounded-xl transition-all">Entrar</button>
+                    <button onClick={() => {setCurrentView('LOGIN'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest hover:bg-white/5 rounded-xl transition-all">Acesso Restrito</button>
                     <button onClick={() => {setCurrentView('REGISTER'); setIsMenuOpen(false);}} className="mt-2 p-5 text-center bg-orange-600 rounded-2xl text-[10px] font-black uppercase text-white tracking-widest shadow-xl">Cadastrar Grátis</button>
                 </>
             ) : (
