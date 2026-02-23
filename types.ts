@@ -66,11 +66,10 @@ export interface Post {
   content: string;
   whatsapp?: string;
   phone?: string;
-  imageUrls?: string[]; 
   logoUrl?: string; 
   audioData?: string;
   createdAt: string;
   expiresAt?: string; 
 }
 
-export type ViewState = 'HOME' | 'LOGIN' | 'REGISTER' | 'DASHBOARD' | 'ADMIN' | 'PAYMENT';
+export type ViewState = 'HOME' | 'LOGIN' | 'REGISTER' | 'DASHBOARD' | 'ADMIN' | 'PAYMENT' | 'RENEW';

@@ -15,24 +15,24 @@ const STORAGE_KEYS = {
   CATEGORIES: 'hj_fallback_categories_v2'
 };
 
-const getLocal = (key: string, def: any) => {
+const getLocal = <T>(key: string, def: T): T => {
   try {
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : def;
-  } catch (e) {
+  } catch {
     return def;
   }
 };
 
-const saveLocal = (key: string, data: any) => {
+const saveLocal = <T>(key: string, data: T) => {
   try {
     localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
+  } catch {
     console.warn("Storage local cheio.");
   }
 };
 
-const cleanId = (id: any): any => {
+const cleanId = (id: string | number): string | number => {
     if (typeof id === 'string') {
         const numeric = id.replace(/\D/g, '');
         return numeric ? Number(numeric) : id;
@@ -40,28 +40,20 @@ const cleanId = (id: any): any => {
     return id;
 };
 
-// Tabelas que falharam anteriormente
-const failedTables = new Set<string>();
 
-async function resilientUpsert(table: string, payload: any): Promise<void> {
-    if (failedTables.has(table)) return;
-    try {
-        const { error } = await supabase.from(table).upsert(payload);
-        if (error) {
-            console.warn(`Supabase ${table} fail:`, error.message);
-            if (error.code === 'PGRST116' || (error as any).status === 404) {
-                failedTables.add(table);
-            }
-        }
-    } catch (e) {
-        failedTables.add(table);
+
+async function resilientUpsert(table: string, payload: Record<string, any>): Promise<void> {
+    const { error } = await supabase.from(table).upsert(payload);
+    if (error) {
+        console.error(`Supabase error on table ${table}:`, error);
+        throw new Error(`Falha ao salvar dados na tabela ${table}: ${error.message}`);
     }
 }
 
 export const db = {
   async init() {
     const users = getLocal(STORAGE_KEYS.USERS, []);
-    const adminExists = users.find((u: any) => u.email.toLowerCase() === 'admin@helio.com');
+    const adminExists = users.find((u: User) => u.email.toLowerCase() === 'admin@helio.com');
     
     if (!adminExists) {
       const admin: User = {
@@ -116,7 +108,7 @@ export const db = {
       const { data, error } = await supabase.from('plans').select('*');
       if (error || !data || data.length === 0) return local;
       return data;
-    } catch (e) { console.error("Supabase getPlans error:", e); return local; }
+    } catch { console.error("Supabase getPlans error:"); return local; }
   },
 
   async savePlan(plan: Partial<Plan>) {
@@ -124,14 +116,19 @@ export const db = {
     const newId = plan.id || String(Date.now());
     const newPlan = { ...plan, id: newId } as Plan;
     saveLocal(STORAGE_KEYS.PLANS, plans.some(p => p.id === newId) ? plans.map(p => p.id === newId ? newPlan : p) : [...plans, newPlan]);
-    await resilientUpsert('plans', { id: cleanId(newId), name: newPlan.name, price: newPlan.price });
+    await resilientUpsert('plans', { id: cleanId(newId), name: newPlan.name, price: newPlan.price, duration_days: newPlan.durationDays, description: newPlan.description });
   },
 
   // Added deletePlan method to fix errors in index.tsx and App.tsx
   async deletePlan(id: string) {
     const plans = await this.getPlans();
     saveLocal(STORAGE_KEYS.PLANS, plans.filter(p => p.id !== id));
-    try { await supabase.from('plans').delete().eq('id', cleanId(id)); } catch(e) {}
+    try {
+      const { error } = await supabase.from('plans').delete().eq('id', cleanId(id));
+      if (error) throw error;
+    } catch (e) {
+      console.error("Supabase deletePlan error:", e);
+    }
   },
 
   async getUsers(): Promise<User[]> {
@@ -167,7 +164,7 @@ export const db = {
         if (data && !error) {
             return { ...data, id: String(data.id), role: data.role as UserRole };
         }
-    } catch (e) { console.error("Supabase authentication error:", e); }
+    } catch { console.error("Supabase authentication error:"); }
 
     return null;
   },
@@ -191,7 +188,12 @@ export const db = {
   async deleteUser(id: string) {
     const users = await this.getUsers();
     saveLocal(STORAGE_KEYS.USERS, users.filter(u => u.id !== id));
-    try { await supabase.from('profiles').delete().eq('id', cleanId(id)); } catch(e) {}
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', cleanId(id));
+      if (error) throw error;
+    } catch (e) {
+      console.error("Supabase deleteUser error:", e);
+    }
   },
 
   async getPosts(): Promise<Post[]> {
@@ -214,7 +216,12 @@ export const db = {
   async deletePost(id: string) {
     const posts = await this.getPosts();
     saveLocal(STORAGE_KEYS.POSTS, posts.filter(p => p.id !== id));
-    try { await supabase.from('posts').delete().eq('id', cleanId(id)); } catch(e) {}
+    try {
+      const { error } = await supabase.from('posts').delete().eq('id', cleanId(id));
+      if (error) throw error;
+    } catch (e) {
+      console.error("Supabase deletePost error:", e);
+    }
   },
 
   async getCategories(): Promise<Category[]> {

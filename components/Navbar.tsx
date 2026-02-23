@@ -9,10 +9,10 @@ interface NavbarProps {
   currentView: ViewState;
   onLogout: () => void;
   config: SiteConfig;
-  isOnline: boolean;
+
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, currentView, onLogout, config, isOnline }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, currentView, onLogout, config }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItem = (label: string, target: ViewState, active: boolean) => (

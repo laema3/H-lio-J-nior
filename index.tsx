@@ -52,6 +52,7 @@ const App: React.FC = () => {
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
     const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+    const [confirmDialog, setConfirmDialog] = useState<{ message: string, onConfirm: () => void } | null>(null);
 
     const showToast = useCallback((m: string, t: 'success' | 'error' = 'success') => {
         setToast({ m, t });
@@ -150,17 +151,21 @@ const App: React.FC = () => {
             await refreshData(); 
             setEditingPost(null);
             showToast("Anúncio Publicado com Sucesso!");
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (e) {
             showToast("Falha ao salvar. Tente fotos menores.", "error");
         } finally { setIsSaving(false); }
     };
 
     const handleDeletePost = async (id: string) => {
-        if (confirm('Tem certeza que deseja excluir permanentemente este anúncio?')) {
-            await db.deletePost(id);
-            await refreshData();
-            showToast("Anúncio removido.");
-        }
+        setConfirmDialog({
+            message: 'Tem certeza que deseja excluir permanentemente este anúncio?',
+            onConfirm: async () => {
+                await db.deletePost(id);
+                await refreshData();
+                showToast("Anúncio removido.");
+            }
+        });
     };
 
     if (siteConfig.maintenanceMode && currentUser?.role !== UserRole.ADMIN && currentView !== 'LOGIN' && currentView !== 'REGISTER') {
@@ -270,6 +275,8 @@ const App: React.FC = () => {
                                             setCurrentView('DASHBOARD'); 
                                         }
                                     }
+                                } catch (err: any) {
+                                    showToast(err.message || "Erro ao processar requisição.", "error");
                                 } finally { setIsLoggingIn(false); }
                             }} className="space-y-4">
                                 {currentView === 'REGISTER' && (
@@ -335,9 +342,14 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <button className="h-14 px-8 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: 'Comércio', imageUrls: [] })}>
-                                <PlusCircle size={20}/> Criar Anúncio
-                            </button>
+                            <div className="flex gap-4">
+                                <button className="h-14 px-8 rounded-2xl bg-red-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-red-700 transition-all" onClick={() => setCurrentView('RENEW')}>
+                                    <Zap size={20}/> Renovar Plano
+                                </button>
+                                <button className="h-14 px-8 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' })}>
+                                    <PlusCircle size={20}/> Criar Anúncio
+                                </button>
+                            </div>
                         </div>
 
                         <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios Publicados</h3>
@@ -348,7 +360,7 @@ const App: React.FC = () => {
                                 {userPosts.map(p => (
                                     <div key={p.id} className="relative group">
                                         <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                            <button onClick={() => setEditingPost(p)} className="p-3 bg-orange-600 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
+                                            <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-3 bg-orange-600 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
                                             <button onClick={() => handleDeletePost(p.id)} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
                                         </div>
                                         <PostCard post={p} />
@@ -357,6 +369,38 @@ const App: React.FC = () => {
                             </div>
                         )}
                    </div>
+                )}
+
+                {currentView === 'RENEW' && currentUser && (
+                    <div className="pt-24 pb-32 max-w-4xl mx-auto px-6 text-center">
+                        <h2 className="text-4xl font-black text-white uppercase mb-4 tracking-tighter">Renove sua Assinatura</h2>
+                        <p className="text-lg text-gray-400 mb-12">Seu plano expirou. Escolha um novo plano abaixo para continuar anunciando.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            {plans.map(plan => (
+                                <div key={plan.id} className="glass-panel p-8 rounded-[30px] border border-white/10 flex flex-col">
+                                    <h3 className="text-2xl font-black text-orange-500 uppercase tracking-tighter">{plan.name}</h3>
+                                    <p className="text-sm text-gray-400 mb-6">{plan.description}</p>
+                                    <div className="my-auto">
+                                        <span className="text-5xl font-black text-white">R${plan.price.toFixed(2)}</span>
+                                        <span className="text-sm text-gray-500"> / {plan.durationDays} dias</span>
+                                    </div>
+                                    <button 
+                                        onClick={async () => {
+                                            const expiresAt = new Date();
+                                            expiresAt.setDate(expiresAt.getDate() + plan.durationDays);
+                                            await db.updateUser({ ...currentUser, planId: plan.id, expiresAt: expiresAt.toISOString() });
+                                            await refreshData();
+                                            setCurrentView('DASHBOARD');
+                                            showToast('Plano renovado com sucesso!');
+                                        }}
+                                        className="mt-8 h-12 w-full bg-orange-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-orange-700 transition-all"
+                                    >
+                                        Contratar Agora
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 )}
 
                 {currentView === 'ADMIN' && currentUser?.role === UserRole.ADMIN && (
@@ -410,7 +454,16 @@ const App: React.FC = () => {
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <button onClick={() => setEditingPlan(pl)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-orange-600"><Edit size={16}/></button>
-                                                    <button onClick={async () => { if(confirm('Excluir este plano?')) { await db.deletePlan(pl.id); refreshData(); } }} className="p-3 bg-white/5 rounded-xl text-red-500 hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
+                                                    <button onClick={() => {
+                                                        setConfirmDialog({
+                                                            message: 'Tem certeza que deseja excluir este plano?',
+                                                            onConfirm: async () => {
+                                                                await db.deletePlan(pl.id);
+                                                                await refreshData();
+                                                                showToast('Plano excluído com sucesso!');
+                                                            }
+                                                        });
+                                                    }} className="p-3 bg-white/5 rounded-xl text-red-500 hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
                                                 </div>
                                             </div>
                                         ))}
@@ -425,7 +478,7 @@ const App: React.FC = () => {
                                         {posts.map(p => (
                                             <div key={p.id} className="relative group">
                                                 <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    <button onClick={() => setEditingPost(p)} className="p-2 bg-orange-600 rounded-lg text-white"><Edit size={14}/></button>
+                                                    <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-2 bg-orange-600 rounded-lg text-white"><Edit size={14}/></button>
                                                     <button onClick={() => handleDeletePost(p.id)} className="p-2 bg-red-600 rounded-lg text-white"><Trash2 size={14}/></button>
                                                 </div>
                                                 <PostCard post={p} />
@@ -460,16 +513,29 @@ const App: React.FC = () => {
                                                         </td>
                                                         <td className="p-4 flex justify-end gap-2">
                                                             <button onClick={() => setEditingUser(u)} className="p-2 bg-white/5 rounded-lg text-white hover:bg-orange-600"><Edit size={14}/></button>
-                                                            <button onClick={async () => { 
+                                                            <button onClick={() => {
                                                                 const newStatus = u.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
-                                                                if(confirm(`${u.status === 'BLOCKED' ? 'Desbloquear' : 'Bloquear'} este cliente?`)) { 
-                                                                    await db.updateUser({...u, status: newStatus}); 
-                                                                    refreshData(); 
-                                                                } 
+                                                                setConfirmDialog({
+                                                                    message: `${newStatus === 'ACTIVE' ? 'Desbloquear' : 'Bloquear'} este cliente?`,
+                                                                    onConfirm: async () => {
+                                                                        await db.updateUser({ ...u, status: newStatus });
+                                                                        await refreshData();
+                                                                        showToast("Status do cliente atualizado!");
+                                                                    }
+                                                                });
                                                             }} className={`p-2 bg-white/5 rounded-lg transition-all ${u.status === 'BLOCKED' ? 'text-green-500 hover:bg-green-600 hover:text-white' : 'text-red-500 hover:bg-red-600 hover:text-white'}`}>
                                                                 <Ban size={14}/>
                                                             </button>
-                                                            <button onClick={async () => { if(confirm('Excluir este cliente definitivamente?')) { await db.deleteUser(u.id); refreshData(); } }} className="p-2 bg-white/5 rounded-lg text-white hover:bg-red-600"><Trash2 size={14}/></button>
+                                                            <button onClick={() => {
+                                                                setConfirmDialog({
+                                                                    message: 'Excluir este cliente definitivamente? Esta ação não pode ser desfeita.',
+                                                                    onConfirm: async () => {
+                                                                        await db.deleteUser(u.id);
+                                                                        await refreshData();
+                                                                        showToast("Cliente excluído.");
+                                                                    }
+                                                                });
+                                                            }} className="p-2 bg-white/5 rounded-lg text-white hover:bg-red-600"><Trash2 size={14}/></button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -542,8 +608,8 @@ const App: React.FC = () => {
                                             await db.updateConfig(siteConfig); 
                                             showToast("Configurações Salvas!"); 
                                             await refreshData(); 
-                                        } catch (e) {
-                                            showToast("Erro ao salvar no banco.", "error");
+                                        } catch (e: any) {
+                                            showToast(e.message || "Erro ao salvar no banco.", "error");
                                         } finally {
                                             setIsSaving(false);
                                         }
@@ -557,7 +623,7 @@ const App: React.FC = () => {
 
             {editingPost && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300 overflow-y-auto">
-                    <form onSubmit={handleSavePost} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
+                    <form onSubmit={(e) => { e.preventDefault(); handleSavePost(e); }} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
                         <h3 className="text-2xl font-black uppercase text-white tracking-tighter text-center">{editingPost.id ? 'Editar Anúncio VIP' : 'Configurar Novo Anúncio'}</h3>
                         <div className="space-y-4">
                             <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} placeholder="TÍTULO CHAMATIVO" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" required />
@@ -589,9 +655,9 @@ const App: React.FC = () => {
                                 </select>
                                 <div className="space-y-2">
                                     <button type="button" onClick={() => document.getElementById('adUpV7')?.click()} className="w-full p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl text-white font-black text-[10px] uppercase hover:bg-white/10 flex items-center justify-center gap-3">
-                                        <ImageIcon size={18}/> {editingPost.imageUrls?.length ? `${editingPost.imageUrls.length} Fotos Adicionadas` : 'Adicionar Fotos (Máx 5)'}
+                                        <ImageIcon size={18}/> {editingPost.logoUrl ? 'Logomarca Adicionada' : 'Adicionar Logomarca'}
                                     </button>
-                                    <input id="adUpV7" type="file" multiple className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, imageUrls: arr}))} />
+                                    <input id="adUpV7" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, logoUrl: arr[0]}), false)} />
                                 </div>
                             </div>
                         </div>
@@ -606,10 +672,13 @@ const App: React.FC = () => {
             {editingPlan && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
                     <form onSubmit={async (e) => {
-                        e.preventDefault(); setIsSaving(true);
+                        e.preventDefault();
+                        setIsSaving(true);
                         try {
                             await db.savePlan(editingPlan);
                             refreshData(); setEditingPlan(null); showToast("Plano Salvo!");
+                        } catch (err: any) {
+                            showToast(err.message || "Erro ao salvar plano", "error");
                         } finally { setIsSaving(false); }
                     }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
                         <h3 className="text-2xl font-black uppercase text-white text-center">Configurar Plano</h3>
@@ -629,10 +698,13 @@ const App: React.FC = () => {
             {editingUser && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
                     <form onSubmit={async (e) => {
-                        e.preventDefault(); setIsSaving(true);
+                        e.preventDefault();
+                        setIsSaving(true);
                         try {
                             await db.updateUser(editingUser as User);
                             refreshData(); setEditingUser(null); showToast("Cliente Atualizado!");
+                        } catch (err: any) {
+                            showToast(err.message || "Erro ao atualizar cliente", "error");
                         } finally { setIsSaving(false); }
                     }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
                         <h3 className="text-2xl font-black uppercase text-white text-center">Editar Cliente</h3>
@@ -682,6 +754,19 @@ const App: React.FC = () => {
             {toast && (
                 <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[1000] px-8 py-4 rounded-full font-black uppercase text-[9px] tracking-[0.2em] shadow-2xl animate-in slide-in-from-bottom duration-300 flex items-center gap-3 ${toast.t === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                     {toast.t === 'success' ? <Check size={14}/> : <X size={14}/>} {toast.m}
+                </div>
+            )}
+
+            {confirmDialog && (
+                <div className="fixed inset-0 z-[700] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
+                    <div className="glass-panel p-8 rounded-[40px] w-full max-w-md text-center space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white">Atenção</h3>
+                        <p className="text-gray-400">{confirmDialog.message}</p>
+                        <div className="flex gap-4">
+                            <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }} className="flex-1 h-12 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-red-700 transition-all">Confirmar</button>
+                            <button onClick={() => setConfirmDialog(null)} className="flex-1 h-12 bg-white/10 text-white rounded-xl font-black uppercase text-[10px] hover:bg-white/20 transition-all">Cancelar</button>
+                        </div>
+                    </div>
                 </div>
             )}
             

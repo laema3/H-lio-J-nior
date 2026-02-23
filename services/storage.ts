@@ -38,8 +38,8 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'c5', name: 'Tecnologia' }
 ];
 
-export const saveToLocal = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
-export const getFromLocal = (key: string, defaultValue: any) => {
+export const saveToLocal = <T>(key: string, data: T) => localStorage.setItem(key, JSON.stringify(data));
+export const getFromLocal = <T>(key: string, defaultValue: T): T => {
   const item = localStorage.getItem(key);
   if (!item) return defaultValue;
   try { return JSON.parse(item); } catch { return defaultValue; }
@@ -52,7 +52,7 @@ export const storageService = {
     if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) saveToLocal(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
     
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
-    if (!users.find((u: any) => u.email === 'admin@helio.com')) {
+    if (!users.find((u: User) => u.email === 'admin@helio.com')) {
       users.push({
         id: 'admin',
         name: 'Hélio Júnior',
@@ -71,7 +71,7 @@ export const storageService = {
     return users.find((u: User) => u.email.toLowerCase() === email.toLowerCase() && u.password === pass) || null;
   },
 
-  async addUser(userData: any) {
+  async addUser(userData: Partial<User>) {
     const users = getFromLocal(STORAGE_KEYS.USERS, []);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);

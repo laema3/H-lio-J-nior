@@ -45,7 +45,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({ whatsapp }) => {
       
       const response = await chatWithAssistant(userMsg, history);
       setMessages(prev => [...prev, { role: 'model', text: response }]);
-    } catch (error) {
+    } catch {
       setMessages(prev => [...prev, { role: 'model', text: 'Desculpe, tive um problema ao processar sua dúvida. Pode tentar novamente?' }]);
     } finally {
       setIsLoading(false);

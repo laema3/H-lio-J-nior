@@ -1,5 +1,5 @@
 
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { 
   getFirestore, 
   doc, 
@@ -11,7 +11,8 @@ import {
   orderBy, 
   deleteDoc, 
   where,
-  limit
+  limit,
+  Firestore
 } from "firebase/firestore";
 
 const getCredentials = () => {
@@ -19,15 +20,15 @@ const getCredentials = () => {
   if (localConfig) {
     try {
       return JSON.parse(localConfig);
-    } catch (e) {
+    } catch {
       return null;
     }
   }
   return null;
 };
 
-let app: any = null;
-let dbInstance: any = null;
+let app: FirebaseApp | null = null;
+let dbInstance: Firestore | null = null;
 
 const initFirebase = () => {
   const config = getCredentials();
@@ -36,8 +37,8 @@ const initFirebase = () => {
       app = getApps().length > 0 ? getApp() : initializeApp(config);
       dbInstance = getFirestore(app);
       return true;
-    } catch (e) {
-      console.error("Erro ao inicializar Firebase:", e);
+    } catch {
+      console.error("Erro ao inicializar Firebase:");
       return false;
     }
   }
@@ -61,7 +62,7 @@ export const reinitializeFirebase = (configJson: string) => {
       }
       return initFirebase();
     }
-  } catch (e) {
+  } catch {
     console.error("JSON de configuração inválido");
   }
   return false;
@@ -73,8 +74,9 @@ export const db = {
     try {
       await getDocs(query(collection(dbInstance, "site_config"), limit(1)));
       return { success: true, logs: ["Conectado ao Firebase Firestore com sucesso!"] };
-    } catch (e: any) {
-      return { success: false, logs: [`Erro de conexão: ${e.message}. Verifique se as Regras do Firestore permitem leitura/escrita.`] };
+    } catch (e) {
+      const error = e as { message: string };
+      return { success: false, logs: [`Erro de conexão: ${error.message}. Verifique se as Regras do Firestore permitem leitura/escrita.`] };
     }
   },
 
@@ -84,9 +86,9 @@ export const db = {
     return snap.exists() ? snap.data() : null;
   },
 
-  async updateConfig(config: any) {
+  async updateConfig(config: Record<string, any>) {
     if (!dbInstance) return;
-    const { id, ...data } = config;
+    const { id: _, ...data } = config; // eslint-disable-line @typescript-eslint/no-unused-vars
     await setDoc(doc(dbInstance, "site_config", "global"), data);
   },
 
@@ -96,7 +98,7 @@ export const db = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
-  async updateUser(user: any) {
+  async updateUser(user: Record<string, any>) {
     if (!dbInstance) return;
     const { id, ...data } = user;
     await setDoc(doc(dbInstance, "profiles", id), data);
@@ -116,14 +118,14 @@ export const db = {
         const q = query(collection(dbInstance, "posts"), orderBy("createdAt", "desc"));
         const snap = await getDocs(q);
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (e) {
+    } catch {
         // Se o índice não existir, o Firestore pode falhar. Retornamos sem order para garantir.
         const snap = await getDocs(collection(dbInstance, "posts"));
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
   },
 
-  async addPost(post: any) {
+  async addPost(post: Record<string, any>) {
     if (!dbInstance) return;
     const { id, ...data } = post;
     await setDoc(doc(dbInstance, "posts", id), data);
@@ -137,7 +139,7 @@ export const db = {
   async getCategories() {
     if (!dbInstance) return null;
     const snap = await getDocs(collection(dbInstance, "categories"));
-    return snap.empty ? null : snap.docs.map(d => (d.data() as any).name);
+    return snap.empty ? null : snap.docs.map(d => (d.data() as { name: string }).name);
   },
 
   async saveCategories(categories: string[]) {

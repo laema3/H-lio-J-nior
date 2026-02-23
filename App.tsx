@@ -518,7 +518,7 @@ export const App: React.FC = () => {
                                             await db.updateConfig(siteConfig); 
                                             showToast("Identidade Visual Atualizada!"); 
                                             await refreshData(); 
-                                        } catch (e) {
+                                        } catch (e) { // eslint-disable-line @typescript-eslint/no-unused-vars
                                             showToast("Erro ao salvar no banco. Tente fotos menores.", "error");
                                         } finally {
                                             setIsSaving(false);
@@ -592,7 +592,7 @@ export const App: React.FC = () => {
                             });
                             refreshData(); setEditingPost(null);
                             showToast("Anúncio Publicado!");
-                        } catch (e) {
+                        } catch (e) { // eslint-disable-line @typescript-eslint/no-unused-vars
                             showToast("Falha ao salvar. Tente reduzir as fotos.", "error");
                         } finally { setIsSaving(false); }
                     }} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-3xl space-y-6 border-white/10 my-auto shadow-3xl">
