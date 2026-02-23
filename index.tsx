@@ -126,6 +126,11 @@ const App: React.FC = () => {
         return `${days} dias restantes`;
     }, [currentUser]);
 
+    const isPlanActive = useMemo(() => {
+        if (!currentUser?.expiresAt) return false;
+        return new Date(currentUser.expiresAt).getTime() > new Date().getTime();
+    }, [currentUser]);
+
     const userPosts = useMemo(() => {
         if (!currentUser) return [];
         if (currentUser.role === UserRole.ADMIN) return posts;
@@ -272,7 +277,8 @@ const App: React.FC = () => {
                                         });
                                         if (newUser) { 
                                             setCurrentUser(newUser); localStorage.setItem(SESSION_KEY, JSON.stringify(newUser));
-                                            setCurrentView('DASHBOARD'); 
+                                            setCurrentView('RENEW'); 
+                                            showToast("Cadastro finalizado! Agora, escolha seu plano.");
                                         }
                                     }
                                 } catch (err: any) {
@@ -346,13 +352,21 @@ const App: React.FC = () => {
                                 <button className="h-14 px-8 rounded-2xl bg-red-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-red-700 transition-all" onClick={() => setCurrentView('RENEW')}>
                                     <Zap size={20}/> Renovar Plano
                                 </button>
-                                <button className="h-14 px-8 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' })}>
-                                    <PlusCircle size={20}/> Criar Anúncio
-                                </button>
+                                {isPlanActive && (
+                                    <button className="h-14 px-8 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' })}>
+                                        <PlusCircle size={20}/> Criar Anúncio
+                                    </button>
+                                )}
                             </div>
                         </div>
 
                         <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios Publicados</h3>
+                        {!isPlanActive && userPosts.length === 0 && (
+                            <div className="text-center py-12 bg-yellow-600/5 rounded-[40px] border border-dashed border-yellow-500/20">
+                                <p className="font-black text-yellow-500">Seu plano expirou ou você ainda não tem um.</p>
+                                <p className="text-sm text-yellow-500/60 mt-2">Renove sua assinatura para criar e gerenciar seus anúncios.</p>
+                            </div>
+                        )}
                         {userPosts.length === 0 ? (
                             <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10 opacity-30">Você ainda não criou nenhum anúncio no portal.</div>
                         ) : (
@@ -450,7 +464,7 @@ const App: React.FC = () => {
                                             <div key={pl.id} className="glass-panel p-6 rounded-2xl flex justify-between items-center">
                                                 <div>
                                                     <h4 className="text-lg font-black text-white uppercase">{pl.name}</h4>
-                                                    <p className="text-[10px] text-gray-500 font-bold">R$ {pl.price.toFixed(2)} | {pl.durationDays} DIAS</p>
+                                                    <p className="text-[10px] text-gray-500 font-bold">R$ {(pl.price || 0).toFixed(2)} | {pl.durationDays || 0} DIAS</p>
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <button onClick={() => setEditingPlan(pl)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-orange-600"><Edit size={16}/></button>

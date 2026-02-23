@@ -32,13 +32,7 @@ const saveLocal = <T>(key: string, data: T) => {
   }
 };
 
-const cleanId = (id: string | number): string | number => {
-    if (typeof id === 'string') {
-        const numeric = id.replace(/\D/g, '');
-        return numeric ? Number(numeric) : id;
-    }
-    return id;
-};
+
 
 
 
@@ -107,7 +101,7 @@ export const db = {
     try {
       const { data, error } = await supabase.from('plans').select('*');
       if (error || !data || data.length === 0) return local;
-      return data;
+      return data.map(p => ({...p, durationDays: p.duration_days, price: Number(p.price) || 0}));
     } catch { console.error("Supabase getPlans error:"); return local; }
   },
 
@@ -116,7 +110,7 @@ export const db = {
     const newId = plan.id || String(Date.now());
     const newPlan = { ...plan, id: newId } as Plan;
     saveLocal(STORAGE_KEYS.PLANS, plans.some(p => p.id === newId) ? plans.map(p => p.id === newId ? newPlan : p) : [...plans, newPlan]);
-    await resilientUpsert('plans', { id: cleanId(newId), name: newPlan.name, price: newPlan.price, duration_days: newPlan.durationDays, description: newPlan.description });
+    await resilientUpsert('plans', { id: newId, name: newPlan.name, price: newPlan.price, duration_days: newPlan.durationDays, description: newPlan.description });
   },
 
   // Added deletePlan method to fix errors in index.tsx and App.tsx
@@ -124,7 +118,7 @@ export const db = {
     const plans = await this.getPlans();
     saveLocal(STORAGE_KEYS.PLANS, plans.filter(p => p.id !== id));
     try {
-      const { error } = await supabase.from('plans').delete().eq('id', cleanId(id));
+      const { error } = await supabase.from('plans').delete().eq('id', id);
       if (error) throw error;
     } catch (e) {
       console.error("Supabase deletePlan error:", e);
@@ -137,7 +131,13 @@ export const db = {
       const { data, error } = await supabase.from('profiles').select('*');
       if (error || !data || data.length === 0) return local;
       // Merge local with remote
-      const remoteUsers = data.map(u => ({ ...u, id: String(u.id), role: u.role as UserRole }));
+      const remoteUsers = data.map(u => ({ 
+        ...u, 
+        id: String(u.id), 
+        role: u.role as UserRole,
+        planId: u.plan_id,
+        expiresAt: u.expires_at,
+      }));
       const merged = [...local];
       remoteUsers.forEach(ru => {
           if (!merged.find(mu => mu.email.toLowerCase() === ru.email.toLowerCase())) {
@@ -162,7 +162,13 @@ export const db = {
     try {
         const { data, error } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).eq('password', pass).maybeSingle();
         if (data && !error) {
-            return { ...data, id: String(data.id), role: data.role as UserRole };
+            return { 
+                ...data, 
+                id: String(data.id), 
+                role: data.role as UserRole,
+                planId: data.plan_id,
+                expiresAt: data.expires_at
+            };
         }
     } catch { console.error("Supabase authentication error:"); }
 
@@ -171,17 +177,22 @@ export const db = {
 
   async addUser(user: Partial<User>) {
     const users = await this.getUsers();
+    const emailExists = users.some(u => u.email.toLowerCase() === user.email?.toLowerCase());
+    if (emailExists) {
+      throw new Error("Este e-mail já está em uso. Tente fazer login.");
+    }
     const newId = String(Date.now());
     const newUser = { ...user, id: newId, createdAt: new Date().toISOString(), status: 'ACTIVE' } as User;
     saveLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-    await resilientUpsert('profiles', { id: cleanId(newId), name: newUser.name, email: newUser.email, password: newUser.password });
+    await resilientUpsert('profiles', { id: newId, name: newUser.name, email: newUser.email, password: newUser.password, role: newUser.role });
     return newUser;
   },
 
   async updateUser(user: User) {
     const users = await this.getUsers();
     saveLocal(STORAGE_KEYS.USERS, users.map(u => u.id === user.id ? user : u));
-    await resilientUpsert('profiles', { id: cleanId(user.id), name: user.name, status: user.status });
+    const { id, name, status, planId, expiresAt } = user;
+    await resilientUpsert('profiles', { id, name, status, plan_id: planId, expires_at: expiresAt });
   },
 
   // Added deleteUser method to fix errors in index.tsx and App.tsx
@@ -189,7 +200,7 @@ export const db = {
     const users = await this.getUsers();
     saveLocal(STORAGE_KEYS.USERS, users.filter(u => u.id !== id));
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', cleanId(id));
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
     } catch (e) {
       console.error("Supabase deleteUser error:", e);
@@ -210,14 +221,14 @@ export const db = {
     const newId = post.id || String(Date.now());
     const newPost = { ...post, id: newId, createdAt: post.createdAt || new Date().toISOString() } as Post;
     saveLocal(STORAGE_KEYS.POSTS, posts.some(p => p.id === newId) ? posts.map(p => p.id === newId ? newPost : p) : [newPost, ...posts]);
-    await resilientUpsert('posts', { id: cleanId(newId), title: newPost.title, content: newPost.content });
+    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content });
   },
 
   async deletePost(id: string) {
     const posts = await this.getPosts();
     saveLocal(STORAGE_KEYS.POSTS, posts.filter(p => p.id !== id));
     try {
-      const { error } = await supabase.from('posts').delete().eq('id', cleanId(id));
+      const { error } = await supabase.from('posts').delete().eq('id', id);
       if (error) throw error;
     } catch (e) {
       console.error("Supabase deletePost error:", e);
