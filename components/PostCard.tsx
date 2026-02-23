@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Post } from '../types';
-import { MessageCircle, Phone, Zap, Clock } from 'lucide-react';
+import { MessageCircle, Phone, Zap, Clock, Globe } from 'lucide-react';
 
 interface PostCardProps {
   post: Post;
@@ -58,19 +58,27 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-3 leading-tight line-clamp-2">{post.title}</h3>
         <p className="text-xs text-gray-400 mb-6 italic leading-relaxed line-clamp-3">&#34;{post.content}&#34;</p>
         
-        <div className="grid grid-cols-2 gap-3 mt-auto">
-          <button 
+        <div className="grid grid-cols-3 gap-3 mt-auto">
+          {post.whatsapp && <button 
             onClick={handleWhatsApp} 
             className="h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all shadow-md active:scale-95"
           >
             <MessageCircle size={14}/> WhatsApp
-          </button>
-          <button 
+          </button>}
+          {post.phone && <button 
             onClick={() => post.phone && window.open(`tel:${post.phone}`)} 
             className="h-11 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all active:scale-95"
           >
             <Phone size={14}/> Ligar
-          </button>
+          </button>}
+          {post.website && <a 
+            href={post.website} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all shadow-md active:scale-95"
+          >
+            <Globe size={14}/> Website
+          </a>}
         </div>
       </div>
     </div>

@@ -220,7 +220,7 @@ const App: React.FC = () => {
                                         <button onClick={() => document.getElementById('ads')?.scrollIntoView({behavior:'smooth'})} className="h-14 px-10 bg-white/5 border border-white/10 text-white rounded-2xl font-black uppercase text-[11px] hover:bg-white/10 transition-all">Ver Parceiros</button>
                                     </div>
                                 </div>
-                                <div className="relative glass-panel p-2 rounded-[35px] overflow-hidden aspect-video border-white/10 hidden lg:block">
+                                <div className="relative glass-panel p-2 rounded-[35px] overflow-hidden aspect-video border-white/10 hidden lg:block animate-swing" style={{ animationDuration: '10s' }}>
                                     <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover rounded-[30px]" alt="Hero Image" />
                                     <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/40 to-transparent" />
                                 </div>
@@ -674,6 +674,11 @@ const App: React.FC = () => {
                                     <input id="adUpV7" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, logoUrl: arr[0]}), false)} />
                                 </div>
                             </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <input value={editingPost.phone || ''} onChange={e => setEditingPost({...editingPost, phone: e.target.value})} placeholder="TELEFONE" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
+                                <input value={editingPost.whatsapp || ''} onChange={e => setEditingPost({...editingPost, whatsapp: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
+                            </div>
+                            <input value={editingPost.website || ''} onChange={e => setEditingPost({...editingPost, website: e.target.value})} placeholder="WEBSITE (OPCIONAL)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
                         </div>
                         <div className="flex gap-4">
                             <button type="submit" className="flex-1 h-14 bg-orange-600 text-white rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Publicando...' : (editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio')}</button>

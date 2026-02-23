@@ -212,7 +212,7 @@ export const db = {
     try {
       const { data, error } = await supabase.from('posts').select('*').order('id', { ascending: false });
       if (error || !data) return local;
-      return data.map(p => ({ ...p, id: String(p.id), imageUrls: p.imageurls || [] }));
+      return data.map(p => ({ ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website }));
     } catch { return local; }
   },
 
@@ -221,7 +221,7 @@ export const db = {
     const newId = post.id || String(Date.now());
     const newPost = { ...post, id: newId, createdAt: post.createdAt || new Date().toISOString() } as Post;
     saveLocal(STORAGE_KEYS.POSTS, posts.some(p => p.id === newId) ? posts.map(p => p.id === newId ? newPost : p) : [newPost, ...posts]);
-    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content });
+    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website });
   },
 
   async deletePost(id: string) {

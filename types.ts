@@ -66,6 +66,7 @@ export interface Post {
   content: string;
   whatsapp?: string;
   phone?: string;
+  website?: string;
   logoUrl?: string; 
   audioData?: string;
   createdAt: string;
