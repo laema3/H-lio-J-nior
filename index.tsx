@@ -160,7 +160,7 @@ const App: React.FC = () => {
         let filtered = posts.filter(post => post.approved || activeUserIds.has(post.authorId));
 
         if (selectedCategory !== 'all') {
-            filtered = filtered.filter(post => post.category === selectedCategory);
+            filtered = filtered.filter(post => post.category?.toLowerCase().trim() === selectedCategory.toLowerCase().trim());
         }
         return filtered;
     }, [posts, selectedCategory, allUsers]);
