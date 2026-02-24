@@ -52,6 +52,7 @@ const App: React.FC = () => {
     const [toast, setToast] = useState<{ m: string, t: 'success' | 'error' } | null>(null);
     const [isGeneratingAi, setIsGeneratingAi] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false);
 
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
@@ -108,8 +109,9 @@ const App: React.FC = () => {
             }
             if (pl) setPlans(pl);
             if (cfg) setSiteConfig(prev => ({...prev, ...cfg}));
-            if (cats) setCategories(cats);
+            if (cats) setCategories(cats.sort((a, b) => a.name.localeCompare(b.name)));
             if (pm) setPaymentMethods(pm);
+            if (p) setPosts(p.sort((a, b) => a.title.localeCompare(b.title)));
             
             if (currentUser) {
                 const fresh = u.find((usr: User) => usr.email.toLowerCase() === currentUser.email.toLowerCase());
@@ -243,6 +245,17 @@ const App: React.FC = () => {
                                     <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover rounded-[30px]" alt="Hero Image" />
                                     <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/40 to-transparent" />
                                 </div>
+                            </div>
+                        </section>
+
+                        <section id="categories-carousel" className="max-w-7xl mx-auto px-6 py-10">
+                            <h2 className="text-4xl font-black uppercase text-white tracking-tighter mb-8">Categorias</h2>
+                            <div className="flex overflow-x-auto space-x-4 pb-4 scrollbar-hide">
+                                {categories.map(cat => (
+                                    <button key={cat.id} className="flex-shrink-0 px-6 py-3 bg-white/5 border border-white/10 rounded-full text-white font-bold uppercase text-[11px] hover:bg-yellow-500 hover:text-white transition-all">
+                                        {cat.name}
+                                    </button>
+                                ))}
                             </div>
                         </section>
 
@@ -852,8 +865,15 @@ const App: React.FC = () => {
                             </div>
                             <input value={editingPost.website || ''} onChange={e => setEditingPost({...editingPost, website: e.target.value})} placeholder="WEBSITE (OPCIONAL)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
                         </div>
-                        <div className="flex gap-4">
-                            <button type="submit" className="flex-1 h-14 bg-yellow-500 text-white rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-yellow-600 transition-all" disabled={isSaving}>{isSaving ? 'Publicando...' : (editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio')}</button>
+                        <div className="mt-6 p-4 bg-orange-600/10 border border-orange-600/20 rounded-2xl text-orange-500 text-[10px] font-bold uppercase leading-relaxed">
+                            <p>Ao publicar este anúncio, você declara que o conteúdo é de sua inteira responsabilidade. Hélio Júnior não tem nenhuma participação ou responsabilidade sobre o que será exibido.</p>
+                            <label className="flex items-center gap-3 mt-4 cursor-pointer">
+                                <input type="checkbox" checked={hasAgreedToTerms} onChange={e => setHasAgreedToTerms(e.target.checked)} className="form-checkbox h-4 w-4 text-orange-600 rounded" />
+                                Concordo com os termos de responsabilidade.
+                            </label>
+                        </div>
+                        <div className="flex gap-4 mt-6">
+                            <button type="submit" className="flex-1 h-14 bg-yellow-500 text-white rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-yellow-600 transition-all" disabled={isSaving || !hasAgreedToTerms}>{isSaving ? 'Publicando...' : (editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio')}</button>
                             <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>

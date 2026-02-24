@@ -34,8 +34,38 @@ async function resilientUpsert(table: string, payload: Record<string, any>): Pro
 
 export const db = {
   async init() {
-    // Placeholder for any future initialization logic
-    return Promise.resolve();
+    try {
+      // Check if admin user exists, create if not
+      const { data: adminUser, error: adminError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', 'admin@helio.com')
+        .maybeSingle();
+
+      if (adminError) {
+        console.error('Supabase init admin check error:', adminError);
+        throw new Error('Failed to check admin user.');
+      }
+
+      if (!adminUser) {
+        const newAdmin = {
+          id: 'admin_id',
+          name: 'Admin',
+          email: 'admin@helio.com',
+          password: 'admin',
+          role: UserRole.ADMIN,
+          phone: '5534999982000',
+          paymentStatus: PaymentStatus.CONFIRMED,
+          status: 'ACTIVE',
+          createdAt: new Date().toISOString(),
+        };
+        await resilientUpsert('profiles', newAdmin);
+        console.log('Admin user created successfully.');
+      }
+    } catch (error: any) {
+      console.error('Supabase init error:', error);
+      throw new Error(`Initialization failed: ${error.message}`);
+    }
   },
 
   async getConfig(): Promise<SiteConfig> {
@@ -54,6 +84,14 @@ export const db = {
     } catch (error: any) { 
         console.error("Supabase getConfig error:", error);
         return fallback; 
+    }
+  },
+
+  async updateConfig(config: SiteConfig) {
+    const { error } = await supabase.from('site_config').upsert({ id: 1, ...config, maintenancemode: config.maintenanceMode });
+    if (error) {
+        console.error('Supabase updateConfig error:', error);
+        throw new Error(`Falha ao salvar configurações: ${error.message}`);
     }
   },
 
