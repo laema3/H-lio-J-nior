@@ -18,6 +18,8 @@ const ADMIN_WHATSAPP = '5534999982000';
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('HOME');
     const [adminSubView, setAdminSubView] = useState<string>('INICIO');
+    const [paymentView, setPaymentView] = useState<boolean>(false);
+    const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<Plan | null>(null);
     const [currentUser, setCurrentUser] = useState<User | null>(() => {
         try {
             const saved = localStorage.getItem(SESSION_KEY);
@@ -26,9 +28,11 @@ const App: React.FC = () => {
     });
 
     const [posts, setPosts] = useState<Post[]>([]);
+    const [visiblePosts, setVisiblePosts] = useState<Post[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [plans, setPlans] = useState<Plan[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [siteConfig, setSiteConfig] = useState<SiteConfig>({
         heroLabel: 'Hélio Júnior',
         heroTitle: 'Voz que Vende',
@@ -52,6 +56,8 @@ const App: React.FC = () => {
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
     const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+    const [editingPaymentMethod, setEditingPaymentMethod] = useState<Partial<PaymentMethod> | null>(null);
+    const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
     const [confirmDialog, setConfirmDialog] = useState<{ message: string, onConfirm: () => void } | null>(null);
 
     const showToast = useCallback((m: string, t: 'success' | 'error' = 'success') => {
@@ -89,15 +95,21 @@ const App: React.FC = () => {
     const refreshData = async () => {
         setIsLoadingData(true);
         try {
-            await db.init(); 
-            const [p, u, pl, cfg, cats] = await Promise.all([
-                db.getPosts(), db.getUsers(), db.getPlans(), db.getConfig(), db.getCategories()
+            const [p, u, pl, cfg, cats, pm] = await Promise.all([
+                db.getPosts(), db.getUsers(), db.getPlans(), db.getConfig(), db.getCategories(), db.getPaymentMethods()
             ]);
-            if (p) setPosts(p);
             if (u) setAllUsers(u);
+            if (p) {
+                setPosts(p);
+                const usersForFiltering = u;
+                const activeUsers = usersForFiltering.filter(user => user.expiresAt && new Date(user.expiresAt).getTime() > new Date().getTime());
+                const activeUserIds = new Set(activeUsers.map(user => user.id));
+                setVisiblePosts(p.filter(post => post.approved || activeUserIds.has(post.authorId)));
+            }
             if (pl) setPlans(pl);
             if (cfg) setSiteConfig(prev => ({...prev, ...cfg}));
             if (cats) setCategories(cats);
+            if (pm) setPaymentMethods(pm);
             
             if (currentUser) {
                 const fresh = u.find((usr: User) => usr.email.toLowerCase() === currentUser.email.toLowerCase());
@@ -116,7 +128,13 @@ const App: React.FC = () => {
         } finally { setIsLoadingData(false); }
     };
 
-    useEffect(() => { refreshData(); }, []);
+    useEffect(() => {
+        const initialize = async () => {
+            await db.init();
+            await refreshData();
+        };
+        initialize();
+    }, []);
 
     const planCountdown = useMemo(() => {
         if (!currentUser?.expiresAt) return null;
@@ -151,14 +169,15 @@ const App: React.FC = () => {
                 whatsapp: editingPost.whatsapp || currentUser?.phone, 
                 phone: editingPost.phone || currentUser?.phone,
                 expiresAt: editingPost.expiresAt || expiresAt.toISOString(),
-                createdAt: editingPost.createdAt || new Date().toISOString()
+                createdAt: editingPost.createdAt || new Date().toISOString(),
+                approved: editingPost.id ? editingPost.approved : true
             });
             await refreshData(); 
             setEditingPost(null);
             showToast("Anúncio Publicado com Sucesso!");
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (e) {
-            showToast("Falha ao salvar. Tente fotos menores.", "error");
+            showToast(e.message || "Falha ao salvar. Verifique os dados.", "error");
         } finally { setIsSaving(false); }
     };
 
@@ -206,17 +225,17 @@ const App: React.FC = () => {
                         <section className="pt-24 pb-8 lg:pt-28 lg:pb-10 px-6">
                             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
                                 <div className="space-y-5 text-center lg:text-left">
-                                    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-orange-600/10 border border-orange-600/20 text-[9px] font-black uppercase tracking-[0.3em] text-orange-500">
+                                    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-[9px] font-black uppercase tracking-[0.3em] text-yellow-500">
                                         <Radio size={14} className="animate-pulse" /> {siteConfig.heroLabel}
                                     </div>
                                     <h1 className="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter leading-[0.9]">
-                                        Voz que <span className="text-orange-600">Vende</span> e Conecta
+                                        Voz que <span className="text-yellow-500">Vende</span> e Conecta
                                     </h1>
                                     <p className="text-lg text-gray-400 max-w-xl mx-auto lg:mx-0 font-light leading-relaxed">
                                         {siteConfig.heroSubtitle}
                                     </p>
                                     <div className="flex flex-wrap gap-4 pt-4 justify-center lg:justify-start">
-                                        <button onClick={() => setCurrentView('REGISTER')} className="h-14 px-10 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase text-[11px] shadow-lg shadow-orange-600/20 transition-all transform hover:-translate-y-1">Anunciar Agora</button>
+                                        <button onClick={() => setCurrentView('REGISTER')} className="h-14 px-10 bg-yellow-500 hover:bg-yellow-600 text-white rounded-2xl font-black uppercase text-[11px] shadow-lg shadow-yellow-500/20 transition-all transform hover:-translate-y-1">Anunciar Agora</button>
                                         <button onClick={() => document.getElementById('ads')?.scrollIntoView({behavior:'smooth'})} className="h-14 px-10 bg-white/5 border border-white/10 text-white rounded-2xl font-black uppercase text-[11px] hover:bg-white/10 transition-all">Ver Parceiros</button>
                                     </div>
                                 </div>
@@ -231,28 +250,53 @@ const App: React.FC = () => {
                             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
                                 <div>
                                     <div className="flex items-center gap-2 mb-2">
-                                        <div className="w-2 h-2 rounded-full bg-orange-600 animate-ping" />
-                                        <span className="text-[10px] font-black uppercase text-orange-500 tracking-widest">Tempo Real</span>
+                                        <div className="w-2 h-2 rounded-full bg-yellow-500 animate-ping" />
+                                        <span className="text-[10px] font-black uppercase text-yellow-500 tracking-widest">Tempo Real</span>
                                     </div>
                                     <h2 className="text-4xl font-black uppercase text-white tracking-tighter">Parceiros VIP</h2>
                                 </div>
                             </div>
-                            {posts.length === 0 ? (
+                            {visiblePosts.length === 0 ? (
                                 <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10">
                                     <p className="opacity-30 italic font-black uppercase text-[10px] tracking-widest">Aguardando novos anúncios...</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {posts.map(p => <PostCard key={p.id} post={p} />)}
+                                    {visiblePosts.map(p => <PostCard key={p.id} post={p} />)}
                                 </div>
                             )}
+                        </section>
+
+                        <section id="plans" className="max-w-7xl mx-auto px-6 py-20">
+                            <div className="text-center mb-12">
+                                <h2 className="text-4xl font-black uppercase text-white tracking-tighter">Planos de Assinatura VIP</h2>
+                                <p className="text-lg text-gray-400 mt-2">Escolha o plano ideal para destacar seu negócio.</p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                {plans.map(plan => (
+                                    <div key={plan.id} className="glass-panel p-8 rounded-[30px] border border-white/10 flex flex-col text-center hover:border-yellow-500/50 transition-all duration-300">
+                                        <h3 className="text-2xl font-black text-yellow-500 uppercase tracking-tighter">{plan.name}</h3>
+                                        <p className="text-sm text-gray-400 mb-6 h-10">{plan.description}</p>
+                                        <div className="my-auto">
+                                            <span className="text-5xl font-black text-white">R${plan.price.toFixed(2)}</span>
+                                            <span className="text-sm text-gray-500"> / {plan.durationDays} dias</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setCurrentView('REGISTER')}
+                                            className="mt-8 h-12 w-full bg-yellow-500 text-white rounded-xl font-black uppercase text-[10px] hover:bg-yellow-600 transition-all transform hover:-translate-y-1 shadow-lg shadow-yellow-500/20"
+                                        >
+                                            Assinar Agora
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </section>
                     </div>
                 )}
 
                 {(currentView === 'LOGIN' || currentView === 'REGISTER') && (
                     <div className="min-h-screen flex items-center justify-center p-6 bg-brand-dark pt-16">
-                        <div className="glass-panel p-10 md:p-14 rounded-[50px] w-full max-w-xl text-center shadow-3xl border-orange-600/10">
+                        <div className="glass-panel p-10 md:p-14 rounded-[50px] w-full max-w-xl text-center shadow-3xl border-yellow-500/10">
                             <h2 className="text-4xl font-black text-white uppercase mb-8 tracking-tighter">{currentView === 'LOGIN' ? 'Login VIP' : 'Cadastro VIP'}</h2>
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
@@ -308,7 +352,7 @@ const App: React.FC = () => {
                                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
-                                <button type="submit" className="w-full h-14 bg-orange-600 text-white rounded-[20px] font-black uppercase text-[11px] shadow-xl flex items-center justify-center gap-3 hover:bg-orange-700 transition-all">
+                                <button type="submit" className="w-full h-14 bg-yellow-500 text-white rounded-[20px] font-black uppercase text-[11px] shadow-xl flex items-center justify-center gap-3 hover:bg-yellow-600 transition-all">
                                     {isLoggingIn && <Loader2 className="animate-spin" size={20}/>} {currentView === 'LOGIN' ? 'Entrar Agora' : 'Finalizar Cadastro'}
                                 </button>
                                 
@@ -323,7 +367,7 @@ const App: React.FC = () => {
                                             await db.init();
                                             showToast("Credenciais Admin Sincronizadas com o Navegador!");
                                         }}
-                                        className="inline-flex items-center justify-center gap-2 text-[8px] font-black text-orange-500/50 uppercase tracking-widest hover:text-orange-500 transition-colors"
+                                        className="inline-flex items-center justify-center gap-2 text-[8px] font-black text-yellow-500/50 uppercase tracking-widest hover:text-yellow-500 transition-colors"
                                     >
                                         <RefreshCw size={10} /> Sincronizar Acesso Local
                                     </button>
@@ -337,13 +381,13 @@ const App: React.FC = () => {
                    <div className="pt-24 pb-32 max-w-7xl mx-auto px-6">
                         <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-12 border-b border-white/5 pb-8">
                             <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 bg-orange-600 rounded-[20px] flex items-center justify-center text-white font-black text-2xl shadow-xl">{currentUser.name[0]}</div>
+                                <div className="w-16 h-16 bg-yellow-500 rounded-[20px] flex items-center justify-center text-white font-black text-2xl shadow-xl">{currentUser.name[0]}</div>
                                 <div>
                                     <h2 className="text-2xl font-black text-white uppercase tracking-tighter">{currentUser.name}</h2>
                                     <div className="flex items-center gap-4 mt-2">
-                                        <div className="flex items-center gap-2 px-3 py-1 bg-orange-600/10 border border-orange-600/30 rounded-full">
-                                            <Clock size={10} className="text-orange-500 animate-pulse" />
-                                            <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest">{planCountdown}</span>
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full">
+                                            <Clock size={10} className="text-yellow-500 animate-pulse" />
+                                            <span className="text-[8px] font-black text-yellow-500 uppercase tracking-widest">{planCountdown}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -353,7 +397,7 @@ const App: React.FC = () => {
                                     <Zap size={20}/> Renovar Plano
                                 </button>
                                 {isPlanActive && (
-                                    <button className="h-14 px-8 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' })}>
+                                    <button className="h-14 px-8 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' })}>
                                         <PlusCircle size={20}/> Criar Anúncio
                                     </button>
                                 )}
@@ -374,7 +418,7 @@ const App: React.FC = () => {
                                 {userPosts.map(p => (
                                     <div key={p.id} className="relative group">
                                         <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                            <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-3 bg-orange-600 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
+                                            <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-3 bg-yellow-500 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
                                             <button onClick={() => handleDeletePost(p.id)} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
                                         </div>
                                         <PostCard post={p} />
@@ -392,22 +436,18 @@ const App: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                             {plans.map(plan => (
                                 <div key={plan.id} className="glass-panel p-8 rounded-[30px] border border-white/10 flex flex-col">
-                                    <h3 className="text-2xl font-black text-orange-500 uppercase tracking-tighter">{plan.name}</h3>
+                                    <h3 className="text-2xl font-black text-yellow-500 uppercase tracking-tighter">{plan.name}</h3>
                                     <p className="text-sm text-gray-400 mb-6">{plan.description}</p>
                                     <div className="my-auto">
                                         <span className="text-5xl font-black text-white">R${plan.price.toFixed(2)}</span>
                                         <span className="text-sm text-gray-500"> / {plan.durationDays} dias</span>
                                     </div>
                                     <button 
-                                        onClick={async () => {
-                                            const expiresAt = new Date();
-                                            expiresAt.setDate(expiresAt.getDate() + plan.durationDays);
-                                            await db.updateUser({ ...currentUser, planId: plan.id, expiresAt: expiresAt.toISOString() });
-                                            await refreshData();
-                                            setCurrentView('DASHBOARD');
-                                            showToast('Plano renovado com sucesso!');
+                                        onClick={() => {
+                                            setSelectedPlanForPayment(plan);
+                                            setPaymentView(true);
                                         }}
-                                        className="mt-8 h-12 w-full bg-orange-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-orange-700 transition-all"
+                                        className="mt-8 h-12 w-full bg-yellow-500 text-white rounded-xl font-black uppercase text-[10px] hover:bg-yellow-600 transition-all"
                                     >
                                         Contratar Agora
                                     </button>
@@ -420,15 +460,17 @@ const App: React.FC = () => {
                 {currentView === 'ADMIN' && currentUser?.role === UserRole.ADMIN && (
                     <div className="flex flex-col md:flex-row min-h-screen pt-20">
                         <aside className="w-full md:w-80 border-r border-white/5 p-8 space-y-3">
-                            <h3 className="text-[9px] font-black uppercase text-orange-500 tracking-[0.4em] mb-10 pl-2">Controle Mestre</h3>
+                            <h3 className="text-[9px] font-black uppercase text-yellow-500 tracking-[0.4em] mb-10 pl-2">Controle Mestre</h3>
                             {[
                                 { id: 'INICIO', label: 'Resumo Geral', icon: LayoutDashboard },
                                 { id: 'ANUNCIOS', label: 'Todos Anúncios', icon: Layers },
                                 { id: 'PLANOS', label: 'Gestão Planos', icon: CreditCard },
                                 { id: 'CLIENTES', label: 'Gestão Clientes', icon: Users },
                                 { id: 'AJUSTES', label: 'Identidade Site', icon: Settings },
+                                { id: 'CATEGORIAS', label: 'Categorias', icon: Layers },
+                                { id: 'PAGAMENTOS', label: 'Formas de Pagamento', icon: CreditCard }
                             ].map(item => (
-                                <button key={item.id} onClick={() => setAdminSubView(item.id)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${adminSubView === item.id ? 'bg-orange-600 text-white shadow-xl' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+                                <button key={item.id} onClick={() => setAdminSubView(item.id)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${adminSubView === item.id ? 'bg-yellow-500 text-white shadow-xl' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
                                     <item.icon size={18} />
                                     <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
                                 </button>
@@ -438,15 +480,15 @@ const App: React.FC = () => {
                         <main className="flex-1 p-8 lg:p-12">
                             {adminSubView === 'INICIO' && (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-yellow-500/10">
                                         <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Total Assinantes</p>
-                                        <h4 className="text-5xl font-black text-orange-500">{allUsers.length}</h4>
+                                        <h4 className="text-5xl font-black text-yellow-500">{allUsers.length}</h4>
                                     </div>
-                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-yellow-500/10">
                                         <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Anúncios Totais</p>
                                         <h4 className="text-5xl font-black text-white">{posts.length}</h4>
                                     </div>
-                                    <div className="glass-panel p-8 rounded-[30px] text-center border-orange-600/10">
+                                    <div className="glass-panel p-8 rounded-[30px] text-center border-yellow-500/10">
                                         <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Planos Criados</p>
                                         <h4 className="text-5xl font-black text-white">{plans.length}</h4>
                                     </div>
@@ -457,7 +499,7 @@ const App: React.FC = () => {
                                 <div className="space-y-8">
                                     <div className="flex justify-between items-center">
                                         <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Configuração de Planos</h3>
-                                        <button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })} className="h-12 px-6 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-orange-700 transition-all"><PlusCircle size={18}/> Novo Plano</button>
+                                        <button onClick={() => setEditingPlan({ name: '', price: 0, durationDays: 30, description: '' })} className="h-12 px-6 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all"><PlusCircle size={18}/> Novo Plano</button>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {plans.map(pl => (
@@ -467,7 +509,7 @@ const App: React.FC = () => {
                                                     <p className="text-[10px] text-gray-500 font-bold">R$ {(pl.price || 0).toFixed(2)} | {pl.durationDays || 0} DIAS</p>
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => setEditingPlan(pl)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-orange-600"><Edit size={16}/></button>
+                                                    <button onClick={() => setEditingPlan(pl)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-yellow-500"><Edit size={16}/></button>
                                                     <button onClick={() => {
                                                         setConfirmDialog({
                                                             message: 'Tem certeza que deseja excluir este plano?',
@@ -492,8 +534,15 @@ const App: React.FC = () => {
                                         {posts.map(p => (
                                             <div key={p.id} className="relative group">
                                                 <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-2 bg-orange-600 rounded-lg text-white"><Edit size={14}/></button>
+                                                    <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-2 bg-yellow-500 rounded-lg text-white"><Edit size={14}/></button>
                                                     <button onClick={() => handleDeletePost(p.id)} className="p-2 bg-red-600 rounded-lg text-white"><Trash2 size={14}/></button>
+                                                    <button onClick={async () => {
+                                                        await db.savePost({ ...p, approved: !p.approved });
+                                                        await refreshData();
+                                                        showToast(`Anúncio ${!p.approved ? 'aprovado' : 'reprovado'}!`);
+                                                    }} className={`p-2 rounded-lg text-white ${p.approved ? 'bg-green-600' : 'bg-gray-600'}`}>
+                                                        {p.approved ? <Check size={14}/> : <X size={14}/>}
+                                                    </button>
                                                 </div>
                                                 <PostCard post={p} />
                                             </div>
@@ -526,7 +575,7 @@ const App: React.FC = () => {
                                                             </span>
                                                         </td>
                                                         <td className="p-4 flex justify-end gap-2">
-                                                            <button onClick={() => setEditingUser(u)} className="p-2 bg-white/5 rounded-lg text-white hover:bg-orange-600"><Edit size={14}/></button>
+                                                            <button onClick={() => setEditingUser(u)} className="p-2 bg-white/5 rounded-lg text-white hover:bg-yellow-500"><Edit size={14}/></button>
                                                             <button onClick={() => {
                                                                 const newStatus = u.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
                                                                 setConfirmDialog({
@@ -559,11 +608,73 @@ const App: React.FC = () => {
                                 </div>
                             )}
 
+                            {adminSubView === 'CATEGORIAS' && (
+                                <div className="space-y-8">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Categorias de Anúncios</h3>
+                                        <button onClick={() => setEditingCategory({ name: '' })} className="h-12 px-6 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all"><PlusCircle size={18}/> Nova Categoria</button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {categories.map(cat => (
+                                            <div key={cat.id} className="glass-panel p-6 rounded-2xl flex justify-between items-center">
+                                                <h4 className="text-lg font-black text-white uppercase">{cat.name}</h4>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => setEditingCategory(cat)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-yellow-500"><Edit size={16}/></button>
+                                                    <button onClick={() => {
+                                                        setConfirmDialog({
+                                                            message: 'Tem certeza que deseja excluir esta categoria?',
+                                                            onConfirm: async () => {
+                                                                await db.deleteCategory(cat.id);
+                                                                await refreshData();
+                                                                showToast('Categoria excluída com sucesso!');
+                                                            }
+                                                        });
+                                                    }} className="p-3 bg-white/5 rounded-xl text-red-500 hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {adminSubView === 'PAGAMENTOS' && (
+                                <div className="space-y-8">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Formas de Pagamento</h3>
+                                    <div className="flex justify-between items-center mb-8">
+                                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Formas de Pagamento</h3>
+                                        <button onClick={() => setEditingPaymentMethod({ name: '', details: '', enabled: true })} className="h-12 px-6 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all"><PlusCircle size={18}/> Nova Forma</button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {paymentMethods.map(method => (
+                                            <div key={method.id} className="glass-panel p-6 rounded-2xl flex justify-between items-center">
+                                                <div>
+                                                    <h4 className="text-lg font-black text-white uppercase">{method.name}</h4>
+                                                    <p className="text-[10px] text-gray-500 font-bold">{method.details}</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => setEditingPaymentMethod(method)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-yellow-500"><Edit size={16}/></button>
+                                                    <button onClick={() => {
+                                                        setConfirmDialog({
+                                                            message: 'Tem certeza que deseja excluir esta forma de pagamento?',
+                                                            onConfirm: async () => {
+                                                                await db.deletePaymentMethod(method.id);
+                                                                await refreshData();
+                                                                showToast('Forma de pagamento excluída!');
+                                                            }
+                                                        });
+                                                    }} className="p-3 bg-white/5 rounded-xl text-red-500 hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {adminSubView === 'AJUSTES' && (
                                 <div className="max-w-4xl space-y-10">
                                     <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Identidade Visual do Portal</h3>
                                     
-                                    <div className="glass-panel p-6 rounded-3xl border-orange-600/20 bg-orange-600/5 flex items-center justify-between">
+                                    <div className="glass-panel p-6 rounded-3xl border-yellow-500/20 bg-yellow-500/5 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
                                             <div className={`p-3 rounded-2xl ${siteConfig.maintenanceMode ? 'bg-orange-600 text-white' : 'bg-white/5 text-gray-500'}`}>
                                                 <Hammer size={24} />
@@ -575,7 +686,7 @@ const App: React.FC = () => {
                                         </div>
                                         <button 
                                             onClick={() => setSiteConfig({...siteConfig, maintenanceMode: !siteConfig.maintenanceMode})}
-                                            className={`w-16 h-8 rounded-full transition-all relative p-1 ${siteConfig.maintenanceMode ? 'bg-orange-600' : 'bg-white/10'}`}
+                                            className={`w-16 h-8 rounded-full transition-all relative p-1 ${siteConfig.maintenanceMode ? 'bg-yellow-500' : 'bg-white/10'}`}
                                         >
                                             <div className={`w-6 h-6 bg-white rounded-full shadow-lg transition-all ${siteConfig.maintenanceMode ? 'translate-x-8' : 'translate-x-0'}`} />
                                         </button>
@@ -627,13 +738,71 @@ const App: React.FC = () => {
                                         } finally {
                                             setIsSaving(false);
                                         }
-                                    }} disabled={isSaving} className="w-full h-14 rounded-2xl bg-orange-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-orange-700 transition-all"><Save size={18}/> {isSaving ? 'Salvando...' : 'Salvar Todas as Alterações'}</button>
+                                    }} disabled={isSaving} className="w-full h-14 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-yellow-600 transition-all"><Save size={18}/> {isSaving ? 'Salvando...' : 'Salvar Todas as Alterações'}</button>
                                 </div>
                             )}
                         </main>
                     </div>
                 )}
             </main>
+
+            {paymentView && selectedPlanForPayment && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300">
+                    <div className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white text-center">Confirmar Pagamento</h3>
+                        <div className="text-center">
+                            <p className="text-gray-400">Você está contratando o plano:</p>
+                            <p className="text-2xl font-bold text-yellow-500">{selectedPlanForPayment.name}</p>
+                            <p className="text-4xl font-black text-white mt-4">R${selectedPlanForPayment.price.toFixed(2)}</p>
+                        </div>
+                        <div className="text-left text-gray-400 text-sm py-4 border-y border-white/10 space-y-4">
+                            <h4 className="text-center text-white font-bold uppercase text-xs">Escolha como pagar:</h4>
+                            {paymentMethods.filter(pm => pm.enabled).map(pm => (
+                                <div key={pm.id} className="p-4 bg-white/5 rounded-lg">
+                                    <p className="font-bold text-white">{pm.name}</p>
+                                    <p className="text-xs">{pm.details}</p>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={async () => {
+                                    if (!currentUser) return;
+                                    setIsSaving(true);
+                                    try {
+                                        const expiresAt = new Date();
+                                        expiresAt.setDate(expiresAt.getDate() + selectedPlanForPayment.durationDays);
+                                        await db.updateUser({ id: currentUser.id, planId: selectedPlanForPayment.id, expiresAt: expiresAt.toISOString() });
+                                        await refreshData();
+                                        setPaymentView(false);
+                                        setSelectedPlanForPayment(null);
+                                        setCurrentView('DASHBOARD');
+                                        showToast('Plano renovado com sucesso!');
+                                    } catch (err: any) {
+                                        showToast(err.message || "Erro ao renovar plano", "error");
+                                    } finally {
+                                        setIsSaving(false);
+                                    }
+                                }}
+                                className="flex-1 h-12 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-green-700 transition-all"
+                                disabled={isSaving}
+                            >
+                                {isSaving ? 'Processando...' : 'Confirmar Pagamento (Simulado)'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPaymentView(false);
+                                    setSelectedPlanForPayment(null);
+                                }}
+                                className="text-[10px] font-black uppercase text-gray-500"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {editingPost && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300 overflow-y-auto">
@@ -644,6 +813,9 @@ const App: React.FC = () => {
                             
                             <div className="relative group">
                                 <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="O QUE VOCÊ ESTÁ OFERECENDO? (A IA PODE TE AJUDAR ->)" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm pr-16" required />
+                                <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]">
+                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                </select>
                                 <button 
                                     type="button"
                                     title="Gerar descrição mágica com IA"
@@ -657,7 +829,7 @@ const App: React.FC = () => {
                                             showToast("Mágica feita!");
                                         } finally { setIsGeneratingAi(false); }
                                     }}
-                                    className="absolute right-4 top-4 p-3 bg-orange-600/20 text-orange-500 rounded-xl hover:bg-orange-600 hover:text-white transition-all border border-orange-600/30 group-hover:scale-105"
+                                    className="absolute right-4 top-4 p-3 bg-yellow-500/20 text-yellow-500 rounded-xl hover:bg-yellow-500 hover:text-white transition-all border border-yellow-500/30 group-hover:scale-105"
                                 >
                                     {isGeneratingAi ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                                 </button>
@@ -681,7 +853,7 @@ const App: React.FC = () => {
                             <input value={editingPost.website || ''} onChange={e => setEditingPost({...editingPost, website: e.target.value})} placeholder="WEBSITE (OPCIONAL)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
                         </div>
                         <div className="flex gap-4">
-                            <button type="submit" className="flex-1 h-14 bg-orange-600 text-white rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Publicando...' : (editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio')}</button>
+                            <button type="submit" className="flex-1 h-14 bg-yellow-500 text-white rounded-2xl font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-yellow-600 transition-all" disabled={isSaving}>{isSaving ? 'Publicando...' : (editingPost.id ? 'Salvar Alterações' : 'Publicar Anúncio')}</button>
                             <button type="button" onClick={() => setEditingPost(null)} className="flex-1 text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>
@@ -714,6 +886,57 @@ const App: React.FC = () => {
                 </div>
             )}
 
+            {editingCategory && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in zoom-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault();
+                        setIsSaving(true);
+                        try {
+                            await db.saveCategory(editingCategory);
+                            await refreshData();
+                            setEditingCategory(null);
+                            showToast('Categoria salva com sucesso!');
+                        } catch (err: any) {
+                            showToast(err.message || 'Erro ao salvar categoria.', 'error');
+                        } finally {
+                            setIsSaving(false);
+                        }
+                    }} className="glass-panel p-8 md:p-12 rounded-[40px] w-full max-w-lg space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter text-center">{editingCategory.id ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+                        <input value={editingCategory.name} onChange={e => setEditingCategory({...editingCategory, name: e.target.value})} placeholder="NOME DA CATEGORIA" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" required />
+                        <div className="flex gap-4">
+                            <button type="button" onClick={() => setEditingCategory(null)} className="flex-1 h-14 rounded-2xl bg-white/10 text-white font-black uppercase text-[11px] hover:bg-white/20 transition-all">Cancelar</button>
+                            <button type="submit" disabled={isSaving} className="flex-1 h-14 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-3 hover:bg-yellow-600 transition-all">
+                                {isSaving ? <Loader2 className="animate-spin" size={20}/> : <Save size={18}/>} Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {editingPaymentMethod && (
+                <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
+                    <form onSubmit={async (e) => {
+                        e.preventDefault();
+                        setIsSaving(true);
+                        try {
+                            await db.savePaymentMethod(editingPaymentMethod);
+                            refreshData(); setEditingPaymentMethod(null); showToast("Forma de Pagamento Salva!");
+                        } catch (err: any) {
+                            showToast(err.message || "Erro ao salvar", "error");
+                        } finally { setIsSaving(false); }
+                    }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
+                        <h3 className="text-2xl font-black uppercase text-white text-center">Configurar Forma de Pagamento</h3>
+                        <input value={editingPaymentMethod.name} onChange={e => setEditingPaymentMethod({...editingPaymentMethod, name: e.target.value})} placeholder="NOME (EX: PIX, CARTÃO)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <textarea value={editingPaymentMethod.details} onChange={e => setEditingPaymentMethod({...editingPaymentMethod, details: e.target.value})} placeholder="DETALHES (CHAVE PIX, ETC)" rows={3} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <div className="flex gap-4">
+                            <button type="submit" className="flex-1 h-12 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar'}</button>
+                            <button type="button" onClick={() => setEditingPaymentMethod(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
             {editingUser && (
                 <div className="fixed inset-0 z-[600] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl animate-in fade-in duration-300">
                     <form onSubmit={async (e) => {
@@ -730,7 +953,7 @@ const App: React.FC = () => {
                         <input value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} placeholder="NOME" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         <input value={editingUser.phone} onChange={e => setEditingUser({...editingUser, phone: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
                         <div className="flex gap-4">
-                            <button type="submit" className="flex-1 h-12 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Atualizando...' : 'Atualizar'}</button>
+                            <button type="submit" className="flex-1 h-12 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" disabled={isSaving}>{isSaving ? 'Atualizando...' : 'Atualizar'}</button>
                             <button type="button" onClick={() => setEditingUser(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>

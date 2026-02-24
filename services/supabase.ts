@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { PaymentStatus, UserRole, Plan, Category, Post, SiteConfig, User } from '../types';
+import { PaymentStatus, UserRole, Plan, Category, Post, SiteConfig, User, PaymentMethod } from '../types';
 
 const SUPABASE_URL = 'https://yzufoswsajzbovmcwscl.supabase.co'; 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6dWZvc3dzYWp6Ym92bWN3c2NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzI4MTMsImV4cCI6MjA4NjkwODgxM30.R8pCkQQbe4ezyFyDmQBHanPhjsKJF-qX3KLsyxHHNsM';
@@ -12,25 +12,13 @@ const STORAGE_KEYS = {
   PLANS: 'hj_fallback_plans_v2',
   USERS: 'hj_fallback_users_v2',
   POSTS: 'hj_fallback_posts_v2',
-  CATEGORIES: 'hj_fallback_categories_v2'
+  CATEGORIES: 'hj_fallback_categories_v2',
+  PAYMENT_METHODS: 'hj_fallback_payment_methods_v2'
 };
 
-const getLocal = <T>(key: string, def: T): T => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : def;
-  } catch {
-    return def;
-  }
-};
 
-const saveLocal = <T>(key: string, data: T) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch {
-    console.warn("Storage local cheio.");
-  }
-};
+
+
 
 
 
@@ -46,122 +34,104 @@ async function resilientUpsert(table: string, payload: Record<string, any>): Pro
 
 export const db = {
   async init() {
-    const users = getLocal(STORAGE_KEYS.USERS, []);
-    const adminExists = users.find((u: User) => u.email.toLowerCase() === 'admin@helio.com');
-    
-    if (!adminExists) {
-      const admin: User = {
-        id: '1',
-        name: 'Hélio Júnior',
-        email: 'admin@helio.com',
-        password: 'admin',
-        role: UserRole.ADMIN,
-        paymentStatus: PaymentStatus.NOT_APPLICABLE,
-        createdAt: new Date().toISOString(),
-        status: 'ACTIVE'
-      };
-      saveLocal(STORAGE_KEYS.USERS, [...users, admin]);
-      console.log("Usuário Admin Local Inicializado.");
-    }
+    // Placeholder for any future initialization logic
+    return Promise.resolve();
   },
 
   async getConfig(): Promise<SiteConfig> {
-    const fallback = getLocal(STORAGE_KEYS.CONFIG, {
+    const fallback = {
         heroLabel: 'Hélio Júnior',
         heroTitle: 'Voz que Vende',
         heroSubtitle: 'Seu portal de classificados com o impacto do rádio digital.',
         heroImageUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=1920',
         maintenanceMode: false
-    });
+    };
 
     try {
       const { data, error } = await supabase.from('site_config').select('*').eq('id', 1).maybeSingle();
       if (error || !data) return fallback;
       return { ...fallback, ...data, maintenanceMode: !!data.maintenancemode };
-    } catch { return fallback; }
-  },
-
-  async updateConfig(cfg: SiteConfig) {
-    saveLocal(STORAGE_KEYS.CONFIG, cfg);
-    try {
-        await resilientUpsert('site_config', {
-            id: 1,
-            herolabel: cfg.heroLabel,
-            herotitle: cfg.heroTitle,
-            herosubtitle: cfg.heroSubtitle,
-            maintenancemode: cfg.maintenanceMode
-        });
-    } catch (e) {
-        console.error("Supabase updateConfig error:", e);
+    } catch (error: any) { 
+        console.error("Supabase getConfig error:", error);
+        return fallback; 
     }
   },
 
+  async getPaymentMethods(): Promise<PaymentMethod[]> {
+    const { data, error } = await supabase.from('payment_methods').select('*');
+    if (error) {
+        console.error('Supabase getPaymentMethods error:', error);
+        return [];
+    }
+    return data || [];
+  },
+
+  async savePaymentMethod(method: Partial<PaymentMethod>) {
+    const newId = method.id || String(Date.now());
+    const newMethod = { ...method, id: newId } as PaymentMethod;
+    await resilientUpsert('payment_methods', { id: newId, name: newMethod.name, details: newMethod.details, enabled: newMethod.enabled });
+  },
+
+  async deletePaymentMethod(id: string) {
+    await supabase.from('payment_methods').delete().match({ id });
+  },
+
   async getPlans(): Promise<Plan[]> {
-    const local = getLocal(STORAGE_KEYS.PLANS, []);
-    try {
-      const { data, error } = await supabase.from('plans').select('*');
-      if (error || !data || data.length === 0) return local;
-      return data.map(p => ({...p, durationDays: p.duration_days, price: Number(p.price) || 0}));
-    } catch { console.error("Supabase getPlans error:"); return local; }
+    const { data, error } = await supabase.from('plans').select('*');
+    if (error) {
+        console.error('Supabase getPlans error:', error);
+        return [];
+    }
+    return data ? data.map(p => ({...p, durationDays: p.duration_days, price: Number(p.price) || 0})) : [];
   },
 
   async savePlan(plan: Partial<Plan>) {
-    const plans = await this.getPlans();
     const newId = plan.id || String(Date.now());
     const newPlan = { ...plan, id: newId } as Plan;
-    saveLocal(STORAGE_KEYS.PLANS, plans.some(p => p.id === newId) ? plans.map(p => p.id === newId ? newPlan : p) : [...plans, newPlan]);
     await resilientUpsert('plans', { id: newId, name: newPlan.name, price: newPlan.price, duration_days: newPlan.durationDays, description: newPlan.description });
   },
 
   // Added deletePlan method to fix errors in index.tsx and App.tsx
   async deletePlan(id: string) {
-    const plans = await this.getPlans();
-    saveLocal(STORAGE_KEYS.PLANS, plans.filter(p => p.id !== id));
+    
     try {
       const { error } = await supabase.from('plans').delete().eq('id', id);
       if (error) throw error;
-    } catch (e) {
-      console.error("Supabase deletePlan error:", e);
+    } catch (error: any) {
+      console.error("Supabase deletePlan error:", error);
     }
   },
 
   async getUsers(): Promise<User[]> {
-    const local = getLocal(STORAGE_KEYS.USERS, []);
-    try {
-      const { data, error } = await supabase.from('profiles').select('*');
-      if (error || !data || data.length === 0) return local;
-      // Merge local with remote
-      const remoteUsers = data.map(u => ({ 
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error) {
+        console.error('Supabase getUsers error:', error);
+        return [];
+    }
+    return data ? data.map(u => ({ 
         ...u, 
         id: String(u.id), 
         role: u.role as UserRole,
         planId: u.plan_id,
         expiresAt: u.expires_at,
-      }));
-      const merged = [...local];
-      remoteUsers.forEach(ru => {
-          if (!merged.find(mu => mu.email.toLowerCase() === ru.email.toLowerCase())) {
-              merged.push(ru);
-          }
-      });
-      return merged;
-    } catch { return local; }
+    })) : [];
   },
 
   async authenticate(email: string, pass: string): Promise<User | null> {
-    // Tenta primeiro o Local Storage para garantir acesso admin rápido
-    const users = await this.getUsers();
-    const found = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === pass);
-    
-    if (found) {
-        if (found.status === 'BLOCKED') return null;
-        return found;
-    }
-
-    // Tenta via Supabase caso o usuário tenha sido criado remotamente e não esteja no local
     try {
-        const { data, error } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).eq('password', pass).maybeSingle();
-        if (data && !error) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('email', email.toLowerCase())
+            .eq('password', pass)
+            .maybeSingle();
+
+        if (error) {
+            console.error("Supabase authentication error:", error);
+            return null;
+        }
+
+        if (data && data.status !== 'BLOCKED') {
             return { 
                 ...data, 
                 id: String(data.id), 
@@ -170,76 +140,86 @@ export const db = {
                 expiresAt: data.expires_at
             };
         }
-    } catch { console.error("Supabase authentication error:"); }
+    } catch (error: any) { 
+        console.error("Exception in authentication:", error);
+    }
 
     return null;
   },
 
   async addUser(user: Partial<User>) {
-    const users = await this.getUsers();
-    const emailExists = users.some(u => u.email.toLowerCase() === user.email?.toLowerCase());
-    if (emailExists) {
-      throw new Error("Este e-mail já está em uso. Tente fazer login.");
+    const { data, error } = await supabase.from('profiles').select('*').eq('email', user.email?.toLowerCase()).maybeSingle();
+    if (error) {
+        console.error('Supabase addUser error:', error);
+        throw new Error('Erro ao verificar e-mail.');
+    }
+    if (data) {
+        throw new Error('Este e-mail já está em uso. Tente fazer login.');
     }
     const newId = String(Date.now());
     const newUser = { ...user, id: newId, createdAt: new Date().toISOString(), status: 'ACTIVE' } as User;
-    saveLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-    await resilientUpsert('profiles', { id: newId, name: newUser.name, email: newUser.email, password: newUser.password, role: newUser.role });
+    await resilientUpsert('profiles', { id: newId, name: newUser.name, email: newUser.email, password: newUser.password, role: newUser.role, status: newUser.status });
     return newUser;
   },
 
   async updateUser(user: User) {
-    const users = await this.getUsers();
-    saveLocal(STORAGE_KEYS.USERS, users.map(u => u.id === user.id ? user : u));
+    
     const { id, name, status, planId, expiresAt } = user;
     await resilientUpsert('profiles', { id, name, status, plan_id: planId, expires_at: expiresAt });
   },
 
   // Added deleteUser method to fix errors in index.tsx and App.tsx
   async deleteUser(id: string) {
-    const users = await this.getUsers();
-    saveLocal(STORAGE_KEYS.USERS, users.filter(u => u.id !== id));
+    
     try {
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
-    } catch (e) {
-      console.error("Supabase deleteUser error:", e);
+    } catch (error: any) {
+      console.error("Supabase deleteUser error:", error);
     }
   },
 
   async getPosts(): Promise<Post[]> {
-    const local = getLocal(STORAGE_KEYS.POSTS, []);
-    try {
-      const { data, error } = await supabase.from('posts').select('*').order('id', { ascending: false });
-      if (error || !data) return local;
-      return data.map(p => ({ ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website }));
-    } catch { return local; }
+    const { data, error } = await supabase.from('posts').select('*').order('id', { ascending: false });
+    if (error) {
+        console.error('Supabase getPosts error:', error);
+        return [];
+    }
+    return data ? data.map(p => ({ ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website, approved: p.approved })) : [];
   },
 
   async savePost(post: Partial<Post>) {
-    const posts = await this.getPosts();
     const newId = post.id || String(Date.now());
     const newPost = { ...post, id: newId, createdAt: post.createdAt || new Date().toISOString() } as Post;
-    saveLocal(STORAGE_KEYS.POSTS, posts.some(p => p.id === newId) ? posts.map(p => p.id === newId ? newPost : p) : [newPost, ...posts]);
-    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website });
+    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website, approved: newPost.approved });
   },
 
   async deletePost(id: string) {
-    const posts = await this.getPosts();
-    saveLocal(STORAGE_KEYS.POSTS, posts.filter(p => p.id !== id));
+    
     try {
       const { error } = await supabase.from('posts').delete().eq('id', id);
       if (error) throw error;
-    } catch (e) {
-      console.error("Supabase deletePost error:", e);
+    } catch (error: any) {
+      console.error("Supabase deletePost error:", error);
     }
   },
 
   async getCategories(): Promise<Category[]> {
-    return getLocal(STORAGE_KEYS.CATEGORIES, [
-        {id:'1', name:'Comércio'}, 
-        {id:'2', name:'Serviços'}, 
-        {id:'3', name:'Alimentação'}
-    ]);
-  }
+    const { data, error } = await supabase.from('categories').select('*');
+    if (error) {
+        console.error('Supabase getCategories error:', error);
+        return [];
+    }
+    return data || [];
+  },
+
+  async saveCategory(category: Partial<Category>) {
+    const newId = category.id || String(Date.now());
+    const newCategory = { ...category, id: newId } as Category;
+    await resilientUpsert('categories', { id: newId, name: newCategory.name });
+  },
+
+  async deleteCategory(id: string) {
+    await supabase.from('categories').delete().match({ id });
+  },
 };

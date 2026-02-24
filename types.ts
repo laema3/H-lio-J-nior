@@ -71,6 +71,14 @@ export interface Post {
   audioData?: string;
   createdAt: string;
   expiresAt?: string; 
+  approved?: boolean;
 }
 
 export type ViewState = 'HOME' | 'LOGIN' | 'REGISTER' | 'DASHBOARD' | 'ADMIN' | 'PAYMENT' | 'RENEW';
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  details: string; // Could be PIX key, bank info, etc.
+  enabled: boolean;
+}

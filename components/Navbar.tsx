@@ -23,7 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
       }}
       className={`px-5 py-2 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all duration-300 ${
         active 
-          ? 'bg-orange-600 text-white shadow-xl shadow-orange-600/20 scale-105' 
+          ? 'bg-yellow-500 text-white shadow-xl shadow-yellow-500/20 scale-105' 
           : 'text-gray-400 hover:text-white hover:bg-white/5'
       }`}
     >
@@ -44,8 +44,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
               {config.headerLogoUrl ? (
                 <img src={config.headerLogoUrl} className="h-full w-auto object-contain group-hover:scale-110 transition-transform" alt="Logo VIP" />
               ) : (
-                <div className="flex items-center gap-3 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 group-hover:border-orange-600 transition-colors">
-                    <Radio className="text-orange-600 w-5 h-5 animate-pulse" />
+                <div className="flex items-center gap-3 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 group-hover:border-yellow-500 transition-colors">
+                    <Radio className="text-yellow-500 w-5 h-5 animate-pulse" />
                     <span className="text-[10px] font-black text-white uppercase tracking-tighter">Hélio Júnior</span>
                 </div>
               )}
@@ -59,7 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                 {navItem('Acesso Restrito', 'LOGIN', currentView === 'LOGIN')}
                 <button
                     onClick={() => setCurrentView('REGISTER')}
-                    className="ml-4 px-8 py-2.5 bg-orange-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-700 hover:shadow-xl shadow-orange-600/10 transition-all transform hover:-translate-y-0.5 active:scale-95"
+                    className="ml-4 px-8 py-2.5 bg-yellow-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-yellow-600 hover:shadow-xl shadow-yellow-500/10 transition-all transform hover:-translate-y-0.5 active:scale-95"
                 >
                     Anunciar Agora
                 </button>
@@ -70,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                 <div className="text-right hidden sm:block">
                     <p className="text-[10px] font-black text-white uppercase tracking-tighter flex items-center justify-end gap-2">
                       {currentUser.name}
-                      {currentUser.role === UserRole.ADMIN && <Shield size={10} className="text-orange-600"/>}
+                      {currentUser.role === UserRole.ADMIN && <Shield size={10} className="text-yellow-500"/>}
                     </p>
                     <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Painel VIP'}</p>
                 </div>
@@ -93,7 +93,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
             {!currentUser ? (
                 <>
                     <button onClick={() => {setCurrentView('LOGIN'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest hover:bg-white/5 rounded-xl transition-all">Acesso Restrito</button>
-                    <button onClick={() => {setCurrentView('REGISTER'); setIsMenuOpen(false);}} className="mt-2 p-5 text-center bg-orange-600 rounded-2xl text-[10px] font-black uppercase text-white tracking-widest shadow-xl">Cadastrar Grátis</button>
+                    <button onClick={() => {setCurrentView('REGISTER'); setIsMenuOpen(false);}} className="mt-2 p-5 text-center bg-yellow-500 rounded-2xl text-[10px] font-black uppercase text-white tracking-widest shadow-xl">Cadastrar Grátis</button>
                 </>
             ) : (
                 <>
