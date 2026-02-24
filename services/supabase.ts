@@ -251,7 +251,10 @@ export const db = {
         console.error('Supabase getPosts error:', error);
         return [];
     }
-    return data ? data.map(p => ({ ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website, approved: p.approved, category: p.category ? p.category.toLowerCase().trim() : undefined })) : [];
+    return data ? data.map(p => {
+        console.log("Raw post data from Supabase:", p);
+        return { ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website, approved: p.approved, category: p.category ? (p.category as string).toLowerCase().trim() : undefined };
+    }) : [];
   },
 
   async savePost(post: Partial<Post>) {
