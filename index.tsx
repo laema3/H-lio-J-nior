@@ -55,9 +55,7 @@ const App: React.FC = () => {
     const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<string>('all'); // 'all' para mostrar todas as categorias
 
-    useEffect(() => {
-        console.log('Selected Category changed:', selectedCategory);
-    }, [selectedCategory]);
+
 
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
@@ -115,7 +113,11 @@ const App: React.FC = () => {
             }
             if (pl) setPlans(pl);
             if (cfg) setSiteConfig(prev => ({...prev, ...cfg}));
-            if (cats) setCategories(cats.sort((a, b) => a.name.localeCompare(b.name)));
+            if (cats) {
+                const sortedCats = cats.sort((a, b) => a.name.localeCompare(b.name));
+                setCategories(sortedCats);
+                console.log('Loaded and sorted categories:', sortedCats);
+            }
             if (pm) setPaymentMethods(pm);
             if (p) setPosts(p.sort((a, b) => a.title.localeCompare(b.title)));
             
@@ -165,10 +167,8 @@ const App: React.FC = () => {
 
         if (selectedCategory !== 'all') {
             const normalizedSelectedCategory = selectedCategory.toLowerCase().trim();
-            console.log('Filtering by category:', normalizedSelectedCategory);
             filtered = filtered.filter(post => {
-                const normalizedPostCategory = post.category ? post.category.toLowerCase().trim() : undefined;
-                console.log(`Post ID: ${post.id}, Post Category: ${normalizedPostCategory}, Matches: ${normalizedPostCategory === normalizedSelectedCategory}`);
+                const normalizedPostCategory = post.category ? post.category.toLowerCase().trim() : 'sem categoria';
                 return normalizedPostCategory === normalizedSelectedCategory;
             });
         }
@@ -442,7 +442,7 @@ const App: React.FC = () => {
                                     <Zap size={20}/> Renovar Plano
                                 </button>
                                 {isPlanActive && (
-                                    <button className="h-14 px-8 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" onClick={() => { setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' }); setHasAgreedToTerms(false); }}>
+                                    <button className="h-14 px-8 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" onClick={() => { setEditingPost({ title: '', content: '', category: categories[0]?.name || 'sem categoria', logoUrl: '' }); setHasAgreedToTerms(false); }}>
                                         <PlusCircle size={20}/> Criar Anúncio
                                     </button>
                                 )}
@@ -463,7 +463,7 @@ const App: React.FC = () => {
                                 {userPosts.map(p => (
                                     <div key={p.id} className="relative group">
                                         <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                            <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-3 bg-yellow-500 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
+                                            <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'sem categoria' })} className="p-3 bg-yellow-500 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
                                             <button onClick={() => handleDeletePost(p.id)} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
                                         </div>
                                         <PostCard post={p} />
@@ -579,7 +579,7 @@ const App: React.FC = () => {
                                         {posts.map(p => (
                                             <div key={p.id} className="relative group">
                                                 <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'Comércio' })} className="p-2 bg-yellow-500 rounded-lg text-white"><Edit size={14}/></button>
+                                                    <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'sem categoria' })} className="p-2 bg-yellow-500 rounded-lg text-white"><Edit size={14}/></button>
                                                     <button onClick={() => handleDeletePost(p.id)} className="p-2 bg-red-600 rounded-lg text-white"><Trash2 size={14}/></button>
                                                     <button onClick={async () => {
                                                         await db.savePost({ ...p, approved: !p.approved });
