@@ -53,6 +53,7 @@ const App: React.FC = () => {
     const [isGeneratingAi, setIsGeneratingAi] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<string>('all'); // 'all' para mostrar todas as categorias
 
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
@@ -105,7 +106,8 @@ const App: React.FC = () => {
                 const usersForFiltering = u;
                 const activeUsers = usersForFiltering.filter(user => user.expiresAt && new Date(user.expiresAt).getTime() > new Date().getTime());
                 const activeUserIds = new Set(activeUsers.map(user => user.id));
-                setVisiblePosts(p.filter(post => post.approved || activeUserIds.has(post.authorId)));
+
+                setVisiblePosts(p); // set all posts initially, filtering will happen in useMemo
             }
             if (pl) setPlans(pl);
             if (cfg) setSiteConfig(prev => ({...prev, ...cfg}));
@@ -150,6 +152,18 @@ const App: React.FC = () => {
         if (!currentUser?.expiresAt) return false;
         return new Date(currentUser.expiresAt).getTime() > new Date().getTime();
     }, [currentUser]);
+
+    const filteredPosts = useMemo(() => {
+        const activeUsers = allUsers.filter(user => user.expiresAt && new Date(user.expiresAt).getTime() > new Date().getTime());
+        const activeUserIds = new Set(activeUsers.map(user => user.id));
+
+        let filtered = posts.filter(post => post.approved || activeUserIds.has(post.authorId));
+
+        if (selectedCategory !== 'all') {
+            filtered = filtered.filter(post => post.category === selectedCategory);
+        }
+        return filtered;
+    }, [posts, selectedCategory, allUsers]);
 
     const userPosts = useMemo(() => {
         if (!currentUser) return [];
@@ -251,8 +265,16 @@ const App: React.FC = () => {
                         <section id="categories-carousel" className="max-w-7xl mx-auto px-6 py-10">
                             <h2 className="text-4xl font-black uppercase text-white tracking-tighter mb-8">Categorias</h2>
                             <div className="flex overflow-x-auto space-x-4 pb-4 scrollbar-hide">
+                                <button
+                                    onClick={() => setSelectedCategory('all')}
+                                    className={`flex-shrink-0 px-6 py-3 rounded-full font-bold uppercase text-[11px] transition-all ${selectedCategory === 'all' ? 'bg-yellow-500 text-white' : 'bg-white/5 border border-white/10 text-white hover:bg-yellow-500 hover:text-white'}`}>
+                                    Todas as Categorias
+                                </button>
                                 {categories.map(cat => (
-                                    <button key={cat.id} className="flex-shrink-0 px-6 py-3 bg-white/5 border border-white/10 rounded-full text-white font-bold uppercase text-[11px] hover:bg-yellow-500 hover:text-white transition-all">
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => setSelectedCategory(cat.name)}
+                                        className={`flex-shrink-0 px-6 py-3 rounded-full font-bold uppercase text-[11px] transition-all ${selectedCategory === cat.name ? 'bg-yellow-500 text-white' : 'bg-white/5 border border-white/10 text-white hover:bg-yellow-500 hover:text-white'}`}>
                                         {cat.name}
                                     </button>
                                 ))}
@@ -269,13 +291,13 @@ const App: React.FC = () => {
                                     <h2 className="text-4xl font-black uppercase text-white tracking-tighter">Parceiros VIP</h2>
                                 </div>
                             </div>
-                            {visiblePosts.length === 0 ? (
+                            {filteredPosts.length === 0 ? (
                                 <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10">
                                     <p className="opacity-30 italic font-black uppercase text-[10px] tracking-widest">Aguardando novos anúncios...</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {visiblePosts.map(p => <PostCard key={p.id} post={p} />)}
+                                    {filteredPosts.map(p => <PostCard key={p.id} post={p} />)}
                                 </div>
                             )}
                         </section>
@@ -410,7 +432,7 @@ const App: React.FC = () => {
                                     <Zap size={20}/> Renovar Plano
                                 </button>
                                 {isPlanActive && (
-                                    <button className="h-14 px-8 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" onClick={() => setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' })}>
+                                    <button className="h-14 px-8 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" onClick={() => { setEditingPost({ title: '', content: '', category: categories[0]?.name || 'Comércio', logoUrl: '' }); setHasAgreedToTerms(false); }}>
                                         <PlusCircle size={20}/> Criar Anúncio
                                     </button>
                                 )}
@@ -826,7 +848,7 @@ const App: React.FC = () => {
                             
                             <div className="relative group">
                                 <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="O QUE VOCÊ ESTÁ OFERECENDO? (A IA PODE TE AJUDAR ->)" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm pr-16" required />
-                                <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]">
+                                <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-black outline-none focus:border-orange-500 font-bold uppercase text-[11px]">
                                     {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                 </select>
                                 <button 

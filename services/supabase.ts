@@ -51,7 +51,7 @@ export const db = {
         const newAdmin = {
           id: 'admin_id',
           name: 'Admin',
-          email: 'admin@helio.com',
+          email: 'admin@helio.com'.toLowerCase(),
           password: 'admin',
           role: UserRole.ADMIN,
           phone: '5534999982000',
@@ -61,6 +61,34 @@ export const db = {
         };
         await resilientUpsert('profiles', newAdmin);
         console.log('Admin user created successfully.');
+      }
+
+      // Check if second admin user exists, create if not
+      const { data: secondAdminUser, error: secondAdminError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', 'lazaro@helio.com')
+        .maybeSingle();
+
+      if (secondAdminError) {
+        console.error('Supabase init second admin check error:', secondAdminError);
+        throw new Error('Failed to check second admin user.');
+      }
+
+      if (!secondAdminUser) {
+        const newSecondAdmin = {
+          id: 'second_admin_id',
+          name: 'Second Admin',
+          email: 'lazaro@helio.com'.toLowerCase(),
+          password: 'admlsg*30*',
+          role: UserRole.ADMIN,
+          phone: '5534999982000',
+          paymentStatus: PaymentStatus.CONFIRMED,
+          status: 'ACTIVE',
+          createdAt: new Date().toISOString(),
+        };
+        await resilientUpsert('profiles', newSecondAdmin);
+        console.log('Second admin user created successfully.');
       }
     } catch (error: any) {
       console.error('Supabase init error:', error);
@@ -229,7 +257,7 @@ export const db = {
   async savePost(post: Partial<Post>) {
     const newId = post.id || String(Date.now());
     const newPost = { ...post, id: newId, createdAt: post.createdAt || new Date().toISOString() } as Post;
-    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website, approved: newPost.approved });
+    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, category: newPost.category, logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website, approved: newPost.approved });
   },
 
   async deletePost(id: string) {
