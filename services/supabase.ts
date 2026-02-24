@@ -251,13 +251,13 @@ export const db = {
         console.error('Supabase getPosts error:', error);
         return [];
     }
-    return data ? data.map(p => ({ ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website, approved: p.approved })) : [];
+    return data ? data.map(p => ({ ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website, approved: p.approved, category: p.category ? p.category.toLowerCase().trim() : undefined })) : [];
   },
 
   async savePost(post: Partial<Post>) {
     const newId = post.id || String(Date.now());
     const newPost = { ...post, id: newId, createdAt: post.createdAt || new Date().toISOString() } as Post;
-    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, category: newPost.category, logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website, approved: newPost.approved });
+    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, category: newPost.category ? newPost.category.toLowerCase().trim() : undefined, logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website, approved: newPost.approved });
   },
 
   async deletePost(id: string) {
@@ -276,13 +276,13 @@ export const db = {
         console.error('Supabase getCategories error:', error);
         return [];
     }
-    return data || [];
+    return data ? data.map(c => ({ ...c, name: c.name ? c.name.toLowerCase().trim() : undefined })) : [];
   },
 
   async saveCategory(category: Partial<Category>) {
     const newId = category.id || String(Date.now());
     const newCategory = { ...category, id: newId } as Category;
-    await resilientUpsert('categories', { id: newId, name: newCategory.name });
+    await resilientUpsert('categories', { id: newId, name: newCategory.name ? newCategory.name.toLowerCase().trim() : undefined });
   },
 
   async deleteCategory(id: string) {

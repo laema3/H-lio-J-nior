@@ -55,6 +55,10 @@ const App: React.FC = () => {
     const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<string>('all'); // 'all' para mostrar todas as categorias
 
+    useEffect(() => {
+        console.log('Selected Category changed:', selectedCategory);
+    }, [selectedCategory]);
+
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
     const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
@@ -160,7 +164,13 @@ const App: React.FC = () => {
         let filtered = posts.filter(post => post.approved || activeUserIds.has(post.authorId));
 
         if (selectedCategory !== 'all') {
-            filtered = filtered.filter(post => post.category?.toLowerCase().trim() === selectedCategory.toLowerCase().trim());
+            const normalizedSelectedCategory = selectedCategory.toLowerCase().trim();
+            console.log('Filtering by category:', normalizedSelectedCategory);
+            filtered = filtered.filter(post => {
+                const normalizedPostCategory = post.category ? post.category.toLowerCase().trim() : undefined;
+                console.log(`Post ID: ${post.id}, Post Category: ${normalizedPostCategory}, Matches: ${normalizedPostCategory === normalizedSelectedCategory}`);
+                return normalizedPostCategory === normalizedSelectedCategory;
+            });
         }
         return filtered;
     }, [posts, selectedCategory, allUsers]);
