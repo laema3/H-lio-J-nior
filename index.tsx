@@ -1,8 +1,15 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 import { createRoot } from 'react-dom/client';
+import { GoogleGenAI } from '@google/genai';
+import imageCompression from 'browser-image-compression';
 import { Navbar } from './components/Navbar';
-import { ViewState, User, UserRole, Post, PaymentStatus, SiteConfig, Plan, Category } from './types';
+import { ViewState, User, UserRole, Post, PaymentStatus, SiteConfig, Plan, Category, PaymentMethod } from './types';
 import { db } from './services/supabase';
 
 import { PostCard } from './components/PostCard';
@@ -54,6 +61,7 @@ const App: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<string>('all'); // 'all' para mostrar todas as categorias
+    const [categorySearchTerm, setCategorySearchTerm] = useState<string>('');
 
 
 
@@ -117,6 +125,7 @@ const App: React.FC = () => {
                 const sortedCats = cats.sort((a, b) => a.name.localeCompare(b.name));
                 setCategories(sortedCats);
                 console.log('Loaded and sorted categories:', sortedCats);
+
             }
             if (pm) setPaymentMethods(pm);
             if (p) setPosts(p.sort((a, b) => a.title.localeCompare(b.title)));
@@ -159,6 +168,12 @@ const App: React.FC = () => {
         return new Date(currentUser.expiresAt).getTime() > new Date().getTime();
     }, [currentUser]);
 
+    const filteredCategories = useMemo(() => {
+        return categories.filter(cat =>
+            cat.name.toLowerCase().includes(categorySearchTerm.toLowerCase())
+        );
+    }, [categories, categorySearchTerm]);
+
     const filteredPosts = useMemo(() => {
         const activeUsers = allUsers.filter(user => user.expiresAt && new Date(user.expiresAt).getTime() > new Date().getTime());
         const activeUserIds = new Set(activeUsers.map(user => user.id));
@@ -180,6 +195,30 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.ADMIN) return posts;
         return posts.filter(p => p.authorId === currentUser.id);
     }, [posts, currentUser]);
+
+    const processAndUploadImage = async (file: File) => {
+        setIsSaving(true);
+        try {
+            const options = {
+                maxSizeMB: 1,          // (max file size in MB)
+                maxWidthOrHeight: 800, // (max width or height in pixels)
+                useWebWorker: true,    // (use web worker for faster compression)
+            };
+            const compressedFile = await imageCompression(file, options);
+
+            const { data, error } = await db.uploadFile(compressedFile);
+            if (error) throw new Error(error.message);
+            if (data) {
+                showToast("Imagem enviada com sucesso!");
+                return data.publicUrl;
+            }
+        } catch (error: any) {
+            showToast(error.message || "Erro ao enviar imagem.", "error");
+        } finally {
+            setIsSaving(false);
+        }
+        return null;
+    };
 
     const handleSavePost = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -272,23 +311,49 @@ const App: React.FC = () => {
                             </div>
                         </section>
 
+
+
                         <section id="categories-carousel" className="max-w-7xl mx-auto px-6 py-10">
                             <h2 className="text-4xl font-black uppercase text-white tracking-tighter mb-8">Categorias</h2>
-                            <div className="flex overflow-x-auto space-x-4 pb-4 scrollbar-hide">
-                                <button
-                                    onClick={() => setSelectedCategory('all')}
-                                    className={`flex-shrink-0 px-6 py-3 rounded-full font-bold uppercase text-[11px] transition-all ${selectedCategory === 'all' ? 'bg-yellow-500 text-white' : 'bg-white/5 border border-white/10 text-white hover:bg-yellow-500 hover:text-white'}`}>
-                                    Todas as Categorias
-                                </button>
-                                {categories.map(cat => (
-                                    <button
-                                        key={cat.id}
-                                        onClick={() => setSelectedCategory(cat.name)}
-                                        className={`flex-shrink-0 px-6 py-3 rounded-full font-bold uppercase text-[11px] transition-all ${selectedCategory === cat.name ? 'bg-yellow-500 text-white' : 'bg-white/5 border border-white/10 text-white hover:bg-yellow-500 hover:text-white'}`}>
-                                        {cat.name}
-                                    </button>
-                                ))}
+                            <div className="flex flex-col md:flex-row items-center gap-4 mb-8">
+                                <input
+                                    type="text"
+                                    placeholder="Pesquisar categorias..."
+                                    className="w-full md:w-auto flex-1 bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={categorySearchTerm}
+                                    onChange={(e) => setCategorySearchTerm(e.target.value)}
+                                />
                             </div>
+                            <Swiper
+                                slidesPerView={1}
+                                spaceBetween={10}
+                                navigation
+                                pagination={{ clickable: true }}
+                                breakpoints={{
+                                    640: { slidesPerView: 2, spaceBetween: 20 },
+                                    768: { slidesPerView: 3, spaceBetween: 30 },
+                                    1024: { slidesPerView: 4, spaceBetween: 40 },
+                                }}
+                                modules={[Navigation, Pagination]}
+                                className="mySwiper"
+                            >
+                                <SwiperSlide>
+                                    <button
+                                        onClick={() => setSelectedCategory('all')}
+                                        className={`w-full h-24 flex items-center justify-center rounded-xl font-bold uppercase text-[11px] transition-all ${selectedCategory === 'all' ? 'bg-yellow-500 text-white' : 'bg-white/5 border border-white/10 text-white hover:bg-yellow-500 hover:text-white'}`}>
+                                        Todas as Categorias
+                                    </button>
+                                </SwiperSlide>
+                                {filteredCategories.map(cat => (
+                                    <SwiperSlide key={cat.id}>
+                                        <button
+                                            onClick={() => setSelectedCategory(cat.name)}
+                                            className={`w-full h-24 flex items-center justify-center rounded-xl font-bold uppercase text-[11px] transition-all ${selectedCategory === cat.name ? 'bg-yellow-500 text-white' : 'bg-white/5 border border-white/10 text-white hover:bg-yellow-500 hover:text-white'}`}>
+                                            {cat.name}
+                                        </button>
+                                    </SwiperSlide>
+                                ))}
+                            </Swiper>
                         </section>
 
                         <section id="ads" className="max-w-7xl mx-auto px-6 py-10">
@@ -306,9 +371,25 @@ const App: React.FC = () => {
                                     <p className="opacity-30 italic font-black uppercase text-[10px] tracking-widest">Aguardando novos anúncios...</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {filteredPosts.map(p => <PostCard key={p.id} post={p} />)}
-                                </div>
+                                <Swiper
+                                    slidesPerView={1}
+                                    spaceBetween={10}
+                                    navigation
+                                    pagination={{ clickable: true }}
+                                    breakpoints={{
+                                        640: { slidesPerView: 2, spaceBetween: 20 },
+                                        768: { slidesPerView: 3, spaceBetween: 30 },
+                                        1024: { slidesPerView: 4, spaceBetween: 40 },
+                                    }}
+                                    modules={[Navigation, Pagination]}
+                                    className="mySwiper"
+                                >
+                                    {filteredPosts.map(p => (
+                                        <SwiperSlide key={p.id}>
+                                            <PostCard post={p} />
+                                        </SwiperSlide>
+                                    ))}
+                                </Swiper>
                             )}
                         </section>
 
@@ -575,7 +656,7 @@ const App: React.FC = () => {
                             {adminSubView === 'ANUNCIOS' && (
                                 <div className="space-y-8">
                                     <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Todos os Anúncios do Portal</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                         {posts.map(p => (
                                             <div key={p.id} className="relative group">
                                                 <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -687,7 +768,11 @@ const App: React.FC = () => {
                                     <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Formas de Pagamento</h3>
                                     <div className="flex justify-between items-center mb-8">
                                         <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Formas de Pagamento</h3>
-                                        <button onClick={() => setEditingPaymentMethod({ name: '', details: '', enabled: true })} className="h-12 px-6 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all"><PlusCircle size={18}/> Nova Forma</button>
+                                        <div className="flex gap-4">
+                                            <button onClick={() => setEditingPaymentMethod({ name: '', details: '', enabled: true })} className="h-12 px-6 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all"><PlusCircle size={18}/> Nova Forma</button>
+                                            <button onClick={() => setEditingPaymentMethod({ name: 'PagSeguro', details: 'Configurar PagSeguro', enabled: true, pagseguroSandbox: true })} className="h-12 px-6 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 transition-all"><CreditCard size={18}/> Configurar PagSeguro</button>
+                                            <button onClick={() => setEditingPaymentMethod({ name: 'MercadoPago', details: 'Configurar Mercado Pago', enabled: true, mercadopagoSandbox: true })} className="h-12 px-6 bg-purple-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-purple-600 transition-all"><CreditCard size={18}/> Configurar Mercado Pago</button>
+                                        </div>
                                     </div>
                                     <div className="space-y-4">
                                         {paymentMethods.map(method => (
@@ -979,10 +1064,106 @@ const App: React.FC = () => {
                         } finally { setIsSaving(false); }
                     }} className="glass-panel p-8 rounded-[40px] w-full max-w-lg space-y-6">
                         <h3 className="text-2xl font-black uppercase text-white text-center">Configurar Forma de Pagamento</h3>
-                        <input value={editingPaymentMethod.name} onChange={e => setEditingPaymentMethod({...editingPaymentMethod, name: e.target.value})} placeholder="NOME (EX: PIX, CARTÃO)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
-                        <textarea value={editingPaymentMethod.details} onChange={e => setEditingPaymentMethod({...editingPaymentMethod, details: e.target.value})} placeholder="DETALHES (CHAVE PIX, ETC)" rows={3} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[10px]" required />
+                        <input value={editingPaymentMethod.name} onChange={e => setEditingPaymentMethod({...editingPaymentMethod, name: e.target.value})} placeholder="NOME (EX: PIX, CARTÃO)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-500 font-bold uppercase text-[10px]" required />
+                        <textarea value={editingPaymentMethod.details} onChange={e => setEditingPaymentMethod({...editingPaymentMethod, details: e.target.value})} placeholder="DETALHES (CHAVE PIX, ETC)" rows={3} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-500 font-bold uppercase text-[10px]" required />
+                        {editingPaymentMethod.name === 'PagSeguro' && (
+                            <div className="space-y-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                                <h4 className="text-[10px] font-black uppercase text-yellow-500 tracking-widest">Configurações PagSeguro</h4>
+                                <input
+                                    type="text"
+                                    placeholder="PagSeguro App ID"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.pagseguroAppId || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, pagseguroAppId: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="PagSeguro App Key"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.pagseguroAppKey || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, pagseguroAppKey: e.target.value })}
+                                />
+                                <input
+                                    type="email"
+                                    placeholder="PagSeguro Email"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.pagseguroEmail || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, pagseguroEmail: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="PagSeguro Token"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.pagseguroToken || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, pagseguroToken: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="PagSeguro Public Key"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.pagseguroPublicKey || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, pagseguroPublicKey: e.target.value })}
+                                />
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="checkbox"
+                                        id="pagseguro-sandbox"
+                                        className="w-5 h-5 accent-yellow-500"
+                                        checked={editingPaymentMethod.pagseguroSandbox || false}
+                                        onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, pagseguroSandbox: e.target.checked })}
+                                    />
+                                    <label htmlFor="pagseguro-sandbox" className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Modo Sandbox (Teste)</label>
+                                </div>
+                            </div>
+                        )}
+                        {editingPaymentMethod.name === 'MercadoPago' && (
+                            <div className="space-y-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                                <h4 className="text-[10px] font-black uppercase text-purple-500 tracking-widest">Configurações Mercado Pago</h4>
+                                <input
+                                    type="text"
+                                    placeholder="Mercado Pago Public Key"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-purple-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.mercadopagoPublicKey || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, mercadopagoPublicKey: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Mercado Pago Access Token"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-purple-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.mercadopagoAccessToken || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, mercadopagoAccessToken: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Mercado Pago Integrator ID"
+                                    className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-purple-500 uppercase text-[10px] font-black tracking-widest"
+                                    value={editingPaymentMethod.mercadopagoIntegratorId || ''}
+                                    onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, mercadopagoIntegratorId: e.target.value })}
+                                />
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="checkbox"
+                                        id="mercadopago-sandbox"
+                                        className="w-5 h-5 accent-purple-500"
+                                        checked={editingPaymentMethod.mercadopagoSandbox || false}
+                                        onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, mercadopagoSandbox: e.target.checked })}
+                                    />
+                                    <label htmlFor="mercadopago-sandbox" className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Modo Sandbox (Teste)</label>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="checkbox"
+                                id="payment-enabled"
+                                className="w-5 h-5 accent-yellow-500"
+                                checked={editingPaymentMethod.enabled}
+                                onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, enabled: e.target.checked })}
+                            />
+                            <label htmlFor="payment-enabled" className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Ativar Forma de Pagamento</label>
+                        </div>
                         <div className="flex gap-4">
-                            <button type="submit" className="flex-1 h-12 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-orange-700 transition-all" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar'}</button>
+                            <button type="submit" className="flex-1 h-12 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar'}</button>
                             <button type="button" onClick={() => setEditingPaymentMethod(null)} className="text-[10px] font-black uppercase text-gray-500">Cancelar</button>
                         </div>
                     </form>
