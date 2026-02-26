@@ -6,7 +6,6 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import { createRoot } from 'react-dom/client';
-import { GoogleGenAI } from '@google/genai';
 import imageCompression from 'browser-image-compression';
 import { Navbar } from './components/Navbar';
 import { ViewState, User, UserRole, Post, PaymentStatus, SiteConfig, Plan, Category, PaymentMethod } from './types';
@@ -35,7 +34,6 @@ const App: React.FC = () => {
     });
 
     const [posts, setPosts] = useState<Post[]>([]);
-    const [visiblePosts, setVisiblePosts] = useState<Post[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [plans, setPlans] = useState<Plan[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -65,6 +63,7 @@ const App: React.FC = () => {
 
 
 
+    const [userSubView, setUserSubView] = useState('INICIO');
     const [editingPost, setEditingPost] = useState<Partial<Post> | null>(null);
     const [editingPlan, setEditingPlan] = useState<Partial<Plan> | null>(null);
     const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
@@ -76,27 +75,6 @@ const App: React.FC = () => {
         setToast({ m, t });
         setTimeout(() => setToast(null), 4000);
     }, []);
-
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64Array: string[]) => void, multiple = true) => {
-        const files = Array.from(e.target.files || []).slice(0, multiple ? 5 : 1);
-        const results: string[] = [];
-        let processed = 0;
-        if (files.length === 0) return;
-
-        files.forEach(file => {
-            if (file.size > 2 * 1024 * 1024) {
-                showToast(`Foto ${file.name} muito grande. Use fotos menores que 2MB.`, 'error');
-                return;
-            }
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                results.push(reader.result as string);
-                processed++;
-                if (processed === files.length) callback(results);
-            };
-            reader.readAsDataURL(file);
-        });
-    };
 
     const handleLogout = () => {
         localStorage.removeItem(SESSION_KEY);
@@ -115,9 +93,8 @@ const App: React.FC = () => {
                 setPosts(p);
                 const usersForFiltering = u;
                 const activeUsers = usersForFiltering.filter(user => user.expiresAt && new Date(user.expiresAt).getTime() > new Date().getTime());
-                const activeUserIds = new Set(activeUsers.map(user => user.id));
 
-                setVisiblePosts(p); // set all posts initially, filtering will happen in useMemo
+                setPosts(p); // set all posts initially, filtering will happen in useMemo
             }
             if (pl) setPlans(pl);
             if (cfg) setSiteConfig(prev => ({...prev, ...cfg}));
@@ -177,8 +154,22 @@ const App: React.FC = () => {
     const filteredPosts = useMemo(() => {
         const activeUsers = allUsers.filter(user => user.expiresAt && new Date(user.expiresAt).getTime() > new Date().getTime());
         const activeUserIds = new Set(activeUsers.map(user => user.id));
+        const normalize = (s: string) => (s || '').replace(/\D/g, '');
+        const activeUserPhones = new Set(activeUsers.map(user => normalize(user.phone)));
 
-        let filtered = posts.filter(post => post.approved || activeUserIds.has(post.authorId));
+        let filtered = posts.filter(post => {
+            if (post.approved) return true;
+            
+            // Show unapproved posts if author is active
+            if (activeUserIds.has(post.authorId)) return true;
+            
+            const pWhatsapp = normalize(post.whatsapp);
+            const pPhone = normalize(post.phone);
+            if (pWhatsapp && activeUserPhones.has(pWhatsapp)) return true;
+            if (pPhone && activeUserPhones.has(pPhone)) return true;
+            
+            return false;
+        });
 
         if (selectedCategory !== 'all') {
             const normalizedSelectedCategory = selectedCategory.toLowerCase().trim();
@@ -192,16 +183,29 @@ const App: React.FC = () => {
 
     const userPosts = useMemo(() => {
         if (!currentUser) return [];
-        if (currentUser.role === UserRole.ADMIN) return posts;
-        return posts.filter(p => p.authorId === currentUser.id);
+        
+        const normalize = (s: string) => (s || '').replace(/\D/g, '');
+        const userPhone = normalize(currentUser.phone);
+        
+        return posts.filter(p => {
+            // Prioritize authorId for ownership
+            if (p.authorId === currentUser.id) return true;
+            
+            // Fallback to phone number for legacy posts or if authorId is missing
+            if (!userPhone) return false;
+            const pWhatsapp = normalize(p.whatsapp);
+            const pPhone = normalize(p.phone);
+            return (pWhatsapp && pWhatsapp === userPhone) || 
+                   (pPhone && pPhone === userPhone);
+        });
     }, [posts, currentUser]);
 
     const processAndUploadImage = async (file: File) => {
         setIsSaving(true);
         try {
             const options = {
-                maxSizeMB: 1,          // (max file size in MB)
-                maxWidthOrHeight: 800, // (max width or height in pixels)
+                maxSizeMB: 0.5,          // (max file size in MB)
+                maxWidthOrHeight: 400, // (max width or height in pixels)
                 useWebWorker: true,    // (use web worker for faster compression)
             };
             const compressedFile = await imageCompression(file, options);
@@ -447,7 +451,8 @@ const App: React.FC = () => {
                                         });
                                         if (newUser) { 
                                             setCurrentUser(newUser); localStorage.setItem(SESSION_KEY, JSON.stringify(newUser));
-                                            setCurrentView('RENEW'); 
+                                            setCurrentView('DASHBOARD');
+                                            setUserSubView('RENOVAR');
                                             showToast("Cadastro finalizado! Agora, escolha seu plano.");
                                         }
                                     }
@@ -504,82 +509,158 @@ const App: React.FC = () => {
                 )}
 
                 {currentView === 'DASHBOARD' && currentUser && (
-                   <div className="pt-24 pb-32 max-w-7xl mx-auto px-6">
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-12 border-b border-white/5 pb-8">
-                            <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 bg-yellow-500 rounded-[20px] flex items-center justify-center text-white font-black text-2xl shadow-xl">{currentUser.name[0]}</div>
-                                <div>
-                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">{currentUser.name}</h2>
-                                    <div className="flex items-center gap-4 mt-2">
-                                        <div className="flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full">
-                                            <Clock size={10} className="text-yellow-500 animate-pulse" />
-                                            <span className="text-[8px] font-black text-yellow-500 uppercase tracking-widest">{planCountdown}</span>
-                                        </div>
-                                    </div>
+                    <div className="flex flex-col md:flex-row min-h-screen pt-20">
+                        <aside className="w-full md:w-80 border-r border-white/5 p-8 space-y-3">
+                            <div className="flex items-center gap-4 mb-10 pl-2">
+                                <div className="w-12 h-12 bg-yellow-500 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-xl">{currentUser.name[0]}</div>
+                                <div className="overflow-hidden">
+                                    <h2 className="text-sm font-black text-white uppercase truncate">{currentUser.name}</h2>
+                                    <p className="text-[8px] font-black text-yellow-500 uppercase tracking-widest">{planCountdown}</p>
                                 </div>
                             </div>
-                            <div className="flex gap-4">
-                                <button className="h-14 px-8 rounded-2xl bg-red-600 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-red-700 transition-all" onClick={() => setCurrentView('RENEW')}>
-                                    <Zap size={20}/> Renovar Plano
+
+                            {[
+                                { id: 'INICIO', label: 'Meu Resumo', icon: LayoutDashboard },
+                                { id: 'ANUNCIOS', label: 'Meus Anúncios', icon: Layers },
+                                { id: 'RENOVAR', label: 'Renovar Plano', icon: Zap },
+                                { id: 'PERFIL', label: 'Meus Dados', icon: Settings }
+                            ].map(item => (
+                                <button key={item.id} onClick={() => setUserSubView(item.id)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${userSubView === item.id ? 'bg-yellow-500 text-white shadow-xl' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+                                    <item.icon size={18} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
                                 </button>
-                                {isPlanActive && (
-                                    <button className="h-14 px-8 rounded-2xl bg-yellow-500 text-white font-black uppercase text-[11px] flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all" onClick={() => { setEditingPost({ title: '', content: '', category: categories[0]?.name || 'sem categoria', logoUrl: '' }); setHasAgreedToTerms(false); }}>
-                                        <PlusCircle size={20}/> Criar Anúncio
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        <h3 className="text-2xl font-black uppercase text-white mb-8 tracking-tighter">Meus Anúncios Publicados</h3>
-                        {!isPlanActive && userPosts.length === 0 && (
-                            <div className="text-center py-12 bg-yellow-600/5 rounded-[40px] border border-dashed border-yellow-500/20">
-                                <p className="font-black text-yellow-500">Seu plano expirou ou você ainda não tem um.</p>
-                                <p className="text-sm text-yellow-500/60 mt-2">Renove sua assinatura para criar e gerenciar seus anúncios.</p>
-                            </div>
-                        )}
-                        {userPosts.length === 0 ? (
-                            <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10 opacity-30">Você ainda não criou nenhum anúncio no portal.</div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                {userPosts.map(p => (
-                                    <div key={p.id} className="relative group">
-                                        <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                            <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'sem categoria' })} className="p-3 bg-yellow-500 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
-                                            <button onClick={() => handleDeletePost(p.id)} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
-                                        </div>
-                                        <PostCard post={p} />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                   </div>
-                )}
-
-                {currentView === 'RENEW' && currentUser && (
-                    <div className="pt-24 pb-32 max-w-4xl mx-auto px-6 text-center">
-                        <h2 className="text-4xl font-black text-white uppercase mb-4 tracking-tighter">Renove sua Assinatura</h2>
-                        <p className="text-lg text-gray-400 mb-12">Seu plano expirou. Escolha um novo plano abaixo para continuar anunciando.</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            {plans.map(plan => (
-                                <div key={plan.id} className="glass-panel p-8 rounded-[30px] border border-white/10 flex flex-col">
-                                    <h3 className="text-2xl font-black text-yellow-500 uppercase tracking-tighter">{plan.name}</h3>
-                                    <p className="text-sm text-gray-400 mb-6">{plan.description}</p>
-                                    <div className="my-auto">
-                                        <span className="text-5xl font-black text-white">R${plan.price.toFixed(2)}</span>
-                                        <span className="text-sm text-gray-500"> / {plan.durationDays} dias</span>
-                                    </div>
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedPlanForPayment(plan);
-                                            setPaymentView(true);
-                                        }}
-                                        className="mt-8 h-12 w-full bg-yellow-500 text-white rounded-xl font-black uppercase text-[10px] hover:bg-yellow-600 transition-all"
-                                    >
-                                        Contratar Agora
-                                    </button>
-                                </div>
                             ))}
-                        </div>
+                        </aside>
+
+                        <main className="flex-1 p-8 lg:p-12">
+                            {userSubView === 'INICIO' && (
+                                <div className="space-y-10">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="glass-panel p-8 rounded-[30px] text-center border-yellow-500/10">
+                                            <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Meus Anúncios</p>
+                                            <h4 className="text-5xl font-black text-yellow-500">{userPosts.length}</h4>
+                                        </div>
+                                        <div className="glass-panel p-8 rounded-[30px] text-center border-yellow-500/10">
+                                            <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Status do Plano</p>
+                                            <h4 className={`text-xl font-black uppercase ${isPlanActive ? 'text-green-500' : 'text-red-500'}`}>{isPlanActive ? 'Ativo' : 'Expirado'}</h4>
+                                            <p className="text-[8px] text-gray-500 mt-2">{planCountdown}</p>
+                                        </div>
+                                        <div className="glass-panel p-8 rounded-[30px] text-center border-yellow-500/10">
+                                            <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-2">Tipo de Conta</p>
+                                            <h4 className="text-xl font-black text-white uppercase">Anunciante VIP</h4>
+                                        </div>
+                                    </div>
+
+                                    <div className="glass-panel p-10 rounded-[40px] border-yellow-500/10 bg-yellow-500/[0.02]">
+                                        <h3 className="text-2xl font-black uppercase text-white mb-4 tracking-tighter">Bem-vindo ao seu Painel VIP</h3>
+                                        <p className="text-sm text-gray-400 leading-relaxed mb-8">Aqui você gerencia sua presença no Portal Hélio Júnior. Crie novos anúncios, edite os existentes e acompanhe o status da sua assinatura.</p>
+                                        <div className="flex gap-4">
+                                            {isPlanActive && (
+                                                <button onClick={() => { setEditingPost({ title: '', content: '', category: categories[0]?.name || 'sem categoria', logoUrl: '', website: '', whatsapp: currentUser.phone, phone: currentUser.phone }); setHasAgreedToTerms(false); }} className="h-12 px-8 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all shadow-lg shadow-yellow-500/20">
+                                                    <PlusCircle size={18}/> Criar Novo Anúncio
+                                                </button>
+                                            )}
+                                            <button onClick={() => setUserSubView('RENOVAR')} className="h-12 px-8 bg-white/5 text-white border border-white/10 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-white/10 transition-all">
+                                                <Zap size={18}/> Ver Planos
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {userSubView === 'ANUNCIOS' && (
+                                <div className="space-y-8">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Meus Anúncios Publicados</h3>
+                                        {isPlanActive && (
+                                            <button onClick={() => { setEditingPost({ title: '', content: '', category: categories[0]?.name || 'sem categoria', logoUrl: '', website: '', whatsapp: currentUser.phone, phone: currentUser.phone }); setHasAgreedToTerms(false); }} className="h-12 px-6 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all shadow-lg shadow-yellow-500/20">
+                                                <PlusCircle size={18}/> Novo Anúncio
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {userPosts.length === 0 ? (
+                                        <div className="text-center py-20 bg-white/[0.02] rounded-[40px] border border-dashed border-white/10 opacity-30">
+                                            Você ainda não criou nenhum anúncio no portal.
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                            {userPosts.map(p => (
+                                                <div key={p.id} className="relative group">
+                                                    <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                        <button onClick={() => setEditingPost({ ...p, category: p.category || categories[0]?.name || 'sem categoria' })} className="p-3 bg-yellow-500 rounded-xl text-white shadow-xl hover:scale-110"><Edit size={16}/></button>
+                                                        <button onClick={() => handleDeletePost(p.id)} className="p-3 bg-red-600 rounded-xl text-white shadow-xl hover:scale-110"><Trash2 size={16}/></button>
+                                                    </div>
+                                                    
+                                                    {/* Badge de Status */}
+                                                    <div className={`absolute top-6 left-6 z-20 px-3 py-1 rounded-full text-[8px] font-black uppercase shadow-xl ${p.approved ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'}`}>
+                                                        {p.approved ? 'Aprovado' : 'Pendente'}
+                                                    </div>
+
+                                                    <PostCard post={p} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {userSubView === 'RENOVAR' && (
+                                <div className="space-y-8">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Planos de Assinatura</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {plans.map(plan => (
+                                            <div key={plan.id} className="glass-panel p-8 rounded-[30px] border border-white/10 flex flex-col hover:border-yellow-500/30 transition-all">
+                                                <h3 className="text-2xl font-black text-yellow-500 uppercase tracking-tighter">{plan.name}</h3>
+                                                <p className="text-[10px] text-gray-400 mb-6 font-bold">{plan.description}</p>
+                                                <div className="my-auto">
+                                                    <span className="text-4xl font-black text-white">R${plan.price.toFixed(2)}</span>
+                                                    <span className="text-[10px] text-gray-500 font-black uppercase"> / {plan.durationDays} dias</span>
+                                                </div>
+                                                <button 
+                                                    onClick={() => {
+                                                        setSelectedPlanForPayment(plan);
+                                                        setPaymentView(true);
+                                                    }}
+                                                    className="mt-8 h-12 w-full bg-yellow-500 text-white rounded-xl font-black uppercase text-[10px] hover:bg-yellow-600 transition-all"
+                                                >
+                                                    Assinar Agora
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {userSubView === 'PERFIL' && (
+                                <div className="max-w-2xl space-y-8">
+                                    <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Meus Dados Cadastrais</h3>
+                                    <div className="glass-panel p-8 rounded-[30px] space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] font-black uppercase text-gray-500">Nome / Empresa</label>
+                                                <div className="p-5 bg-white/5 rounded-2xl text-white font-bold text-[11px] uppercase">{currentUser.name}</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] font-black uppercase text-gray-500">E-mail</label>
+                                                <div className="p-5 bg-white/5 rounded-2xl text-white font-bold text-[11px] lowercase">{currentUser.email}</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] font-black uppercase text-gray-500">WhatsApp</label>
+                                                <div className="p-5 bg-white/5 rounded-2xl text-white font-bold text-[11px] uppercase">{currentUser.phone}</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] font-black uppercase text-gray-500">Vencimento do Plano</label>
+                                                <div className="p-5 bg-white/5 rounded-2xl text-white font-bold text-[11px] uppercase">
+                                                    {currentUser.expiresAt ? new Date(currentUser.expiresAt).toLocaleDateString('pt-BR') : 'Sem plano'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p className="text-[9px] text-gray-500 font-bold uppercase italic">Para alterar seus dados, entre em contato com o suporte do portal.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </main>
                     </div>
                 )}
 
@@ -740,12 +821,12 @@ const App: React.FC = () => {
                                         <h3 className="text-2xl font-black uppercase text-white tracking-tighter">Categorias de Anúncios</h3>
                                         <button onClick={() => setEditingCategory({ name: '' })} className="h-12 px-6 bg-yellow-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all"><PlusCircle size={18}/> Nova Categoria</button>
                                     </div>
-                                    <div className="space-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {categories.map(cat => (
-                                            <div key={cat.id} className="glass-panel p-6 rounded-2xl flex justify-between items-center">
-                                                <h4 className="text-lg font-black text-white uppercase">{cat.name}</h4>
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => setEditingCategory(cat)} className="p-3 bg-white/5 rounded-xl text-white hover:bg-yellow-500"><Edit size={16}/></button>
+                                            <div key={cat.id} className="glass-panel p-4 rounded-2xl flex justify-between items-center border border-white/5 hover:border-yellow-500/30 transition-all">
+                                                <h4 className="text-sm font-black text-white uppercase truncate pr-2">{cat.name}</h4>
+                                                <div className="flex gap-1 shrink-0">
+                                                    <button onClick={() => setEditingCategory(cat)} className="p-2 bg-white/5 rounded-lg text-white hover:bg-yellow-500 transition-colors"><Edit size={14}/></button>
                                                     <button onClick={() => {
                                                         setConfirmDialog({
                                                             message: 'Tem certeza que deseja excluir esta categoria?',
@@ -755,7 +836,7 @@ const App: React.FC = () => {
                                                                 showToast('Categoria excluída com sucesso!');
                                                             }
                                                         });
-                                                    }} className="p-3 bg-white/5 rounded-xl text-red-500 hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
+                                                    }} className="p-2 bg-white/5 rounded-lg text-red-500 hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={14}/></button>
                                                 </div>
                                             </div>
                                         ))}
@@ -827,21 +908,21 @@ const App: React.FC = () => {
                                             <label className="text-[9px] font-black uppercase text-gray-500">Logo do Topo</label>
                                             <div onClick={() => document.getElementById('upLogoT')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.headerLogoUrl ? <img src={siteConfig.headerLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={24} className="text-gray-600" />}
-                                                <input id="upLogoT" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, headerLogoUrl: arr[0]}), false)} />
+                                                <input id="upLogoT" type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files?.[0]) { const url = await processAndUploadImage(e.target.files[0]); if (url) setSiteConfig({...siteConfig, headerLogoUrl: url}); } }} />
                                             </div>
                                         </div>
                                         <div className="space-y-4">
                                             <label className="text-[9px] font-black uppercase text-gray-500">Banner Principal</label>
                                             <div onClick={() => document.getElementById('upBanner')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.heroImageUrl ? <img src={siteConfig.heroImageUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
-                                                <input id="upBanner" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, heroImageUrl: arr[0]}), false)} />
+                                                <input id="upBanner" type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files?.[0]) { const url = await processAndUploadImage(e.target.files[0]); if (url) setSiteConfig({...siteConfig, heroImageUrl: url}); } }} />
                                             </div>
                                         </div>
                                         <div className="space-y-4">
                                             <label className="text-[9px] font-black uppercase text-gray-500">Imagem Rodapé</label>
                                             <div onClick={() => document.getElementById('upFooter')?.click()} className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 transition-all overflow-hidden relative">
                                                 {siteConfig.bannerFooterUrl ? <img src={siteConfig.bannerFooterUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-600" />}
-                                                <input id="upFooter" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setSiteConfig({...siteConfig, bannerFooterUrl: arr[0]}), false)} />
+                                                <input id="upFooter" type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files?.[0]) { const url = await processAndUploadImage(e.target.files[0]); if (url) setSiteConfig({...siteConfig, bannerFooterUrl: url}); } }} />
                                             </div>
                                         </div>
                                     </div>
@@ -943,9 +1024,6 @@ const App: React.FC = () => {
                             
                             <div className="relative group">
                                 <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} placeholder="O QUE VOCÊ ESTÁ OFERECENDO? (A IA PODE TE AJUDAR ->)" rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 text-sm pr-16" required />
-                                <select value={editingPost.category} onChange={e => setEditingPost({...editingPost, category: e.target.value})} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-black outline-none focus:border-orange-500 font-bold uppercase text-[11px]">
-                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                </select>
                                 <button 
                                     type="button"
                                     title="Gerar descrição mágica com IA"
@@ -973,14 +1051,14 @@ const App: React.FC = () => {
                                     <button type="button" onClick={() => document.getElementById('adUpV7')?.click()} className="w-full p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl text-white font-black text-[10px] uppercase hover:bg-white/10 flex items-center justify-center gap-3">
                                         <ImageIcon size={18}/> {editingPost.logoUrl ? 'Logomarca Adicionada' : 'Adicionar Logomarca'}
                                     </button>
-                                    <input id="adUpV7" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, (arr) => setEditingPost({...editingPost, logoUrl: arr[0]}), false)} />
+                                    <input id="adUpV7" type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files?.[0]) { const url = await processAndUploadImage(e.target.files[0]); if (url) setEditingPost({...editingPost, logoUrl: url}); } }} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <input value={editingPost.phone || ''} onChange={e => setEditingPost({...editingPost, phone: e.target.value})} placeholder="TELEFONE" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
                                 <input value={editingPost.whatsapp || ''} onChange={e => setEditingPost({...editingPost, whatsapp: e.target.value})} placeholder="WHATSAPP" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
+                                <input value={editingPost.website || ''} onChange={e => setEditingPost({...editingPost, website: e.target.value})} placeholder="WEBSITE (URL)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
                             </div>
-                            <input value={editingPost.website || ''} onChange={e => setEditingPost({...editingPost, website: e.target.value})} placeholder="WEBSITE (OPCIONAL)" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-orange-500 font-bold uppercase text-[11px]" />
                         </div>
                         <div className="mt-6 p-4 bg-orange-600/10 border border-orange-600/20 rounded-2xl text-orange-500 text-[10px] font-bold uppercase leading-relaxed">
                             <p>Ao publicar este anúncio, você declara que o conteúdo é de sua inteira responsabilidade. Hélio Júnior não tem nenhuma participação ou responsabilidade sobre o que será exibido.</p>

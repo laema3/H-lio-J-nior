@@ -10,8 +10,6 @@ interface PostCardProps {
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
-  const imageUrl = post.logoUrl || `https://picsum.photos/600/800?random=${post.id}`;
-
   useEffect(() => {
     const calculateTime = () => {
       if (!post.expiresAt) return '30d 0h';
@@ -35,9 +33,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
   return (
     <div className="glass-panel rounded-[30px] overflow-hidden flex flex-col h-full border border-white/5 group hover:border-orange-600/50 transition-all duration-500 shadow-2xl">
-      <div className="relative aspect-[3/4] bg-white/5 overflow-hidden">
-        <img src={imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={post.title} />
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-transparent to-transparent" />
+      <div className="relative h-48 bg-white/5 overflow-hidden flex items-center justify-center p-8">
+        {post.logoUrl ? (
+          <div className="w-32 h-32 rounded-2xl overflow-hidden bg-white/5 border border-white/10 shadow-inner flex items-center justify-center p-2">
+            <img src={post.logoUrl} className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-700" alt={post.title} />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center opacity-20">
+            <Zap size={24} className="text-gray-500" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-transparent to-transparent pointer-events-none" />
 
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-dark/60 backdrop-blur-md rounded-full border border-white/10">
@@ -55,29 +61,32 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           <Zap size={10} className="text-orange-500" />
           <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">{post.authorName}</span>
         </div>
-        <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-3 leading-tight line-clamp-2">{post.title}</h3>
-        <p className="text-xs text-gray-400 mb-6 italic leading-relaxed line-clamp-3">&#34;{post.content}&#34;</p>
+        <h3 className="text-sm font-black text-white uppercase tracking-tighter mb-2 leading-tight line-clamp-1">{post.title}</h3>
+        <p className="text-[10px] text-gray-400 mb-4 italic leading-relaxed line-clamp-2">&#34;{post.content}&#34;</p>
         
-        <div className="grid grid-cols-3 gap-3 mt-auto">
+        <div className="flex gap-2 mt-auto">
           {post.whatsapp && <button 
             onClick={handleWhatsApp} 
-            className="h-11 bg-green-600 hover:bg-green-700 text-white rounded-xl flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all shadow-md active:scale-95"
+            title="WhatsApp"
+            className="w-10 h-10 bg-green-600 hover:bg-green-700 text-white rounded-xl flex items-center justify-center transition-all shadow-md active:scale-95"
           >
-            <MessageCircle size={14}/> WhatsApp
+            <MessageCircle size={18}/>
           </button>}
           {post.phone && <button 
             onClick={() => post.phone && window.open(`tel:${post.phone}`)} 
-            className="h-11 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all active:scale-95"
+            title="Ligar"
+            className="w-10 h-10 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 flex items-center justify-center transition-all active:scale-95"
           >
-            <Phone size={14}/> Ligar
+            <Phone size={18}/>
           </button>}
           {post.website && <a 
-            href={post.website} 
+            href={post.website.startsWith('http') ? post.website : `https://${post.website}`} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-2 text-[9px] font-black uppercase transition-all shadow-md active:scale-95"
+            title="Website"
+            className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-all shadow-md active:scale-95"
           >
-            <Globe size={14}/> Website
+            <Globe size={18}/>
           </a>}
         </div>
       </div>

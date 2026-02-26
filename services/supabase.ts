@@ -245,19 +245,88 @@ export const db = {
     }
   },
 
+  async uploadFile(file: File) {
+    try {
+      const fileExt = file.name ? file.name.split('.').pop() : 'png';
+      const fileName = `${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      console.log('Iniciando upload para o bucket "images":', filePath);
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Erro no upload do Supabase Storage:', uploadError);
+        // Se o erro for 400, geralmente é porque o bucket não existe
+        if (uploadError.message.includes('bucket not found') || (uploadError as any).status === 400) {
+          return { data: null, error: new Error('Erro 400: O bucket "images" não foi encontrado ou está inacessível. Por favor, certifique-se de que criou um bucket PÚBLICO chamado "images" no seu Storage do Supabase.') };
+        }
+        return { data: null, error: uploadError };
+      }
+
+      const { data } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
+
+      console.log('Upload concluído. URL pública:', data.publicUrl);
+      return { data: { publicUrl: data.publicUrl }, error: null };
+    } catch (err: any) {
+      console.error('Exceção no uploadFile:', err);
+      return { data: null, error: err };
+    }
+  },
+
   async getPosts(): Promise<Post[]> {
     const { data, error } = await supabase.from('posts').select('*').order('id', { ascending: false });
     if (error) {
         console.error('Supabase getPosts error:', error);
         return [];
     }
-    return data ? data.map(p => ({ ...p, id: String(p.id), logoUrl: p.logo_url, imageUrls: p.imageurls || [], phone: p.phone, whatsapp: p.whatsapp, website: p.website, approved: p.approved, category: p.category ? (p.category as string).toLowerCase().trim() : 'sem categoria' })) : [];
+    return data ? data.map(p => {
+        const normalize = (s: string) => (s || '').replace(/\D/g, '');
+        return { 
+            ...p, 
+            id: String(p.id), 
+            authorId: normalize(p.whatsapp || p.phone || 'sistema'), 
+            authorName: p.author_name || 'Anunciante',
+            logoUrl: p.logo_url, 
+            imageUrls: p.imageurls || [], 
+            phone: p.phone, 
+            whatsapp: p.whatsapp, 
+            website: p.website, 
+            approved: p.approved, 
+            category: p.category ? (p.category as string).toLowerCase().trim() : 'sem categoria' 
+        };
+    }) : [];
   },
 
   async savePost(post: Partial<Post>) {
     const newId = post.id || String(Date.now());
-    const newPost = { ...post, id: newId, createdAt: post.createdAt || new Date().toISOString() } as Post;
-    await resilientUpsert('posts', { id: newId, title: newPost.title, content: newPost.content, category: newPost.category ? newPost.category.toLowerCase().trim() : 'sem categoria', logo_url: newPost.logoUrl, phone: newPost.phone, whatsapp: newPost.whatsapp, website: newPost.website, approved: newPost.approved });
+    
+    const payload = { 
+        id: newId, 
+        title: post.title, 
+        content: post.content, 
+        category: post.category ? post.category.toLowerCase().trim() : 'sem categoria', 
+        logo_url: post.logoUrl || null, 
+        phone: post.phone, 
+        whatsapp: post.whatsapp, 
+        website: post.website, 
+        approved: post.approved,
+        createdAt: post.createdAt || new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('posts').upsert(payload);
+
+    if (error) {
+        console.error('Erro ao salvar post:', error);
+        throw error;
+    }
   },
 
   async deletePost(id: string) {

@@ -74,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                     </p>
                     <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Painel VIP'}</p>
                 </div>
-                {currentUser.role === UserRole.ADVERTISER && navItem('Minha Conta', 'DASHBOARD', currentView === 'DASHBOARD')}
+                {navItem('Minha Conta', 'DASHBOARD', currentView === 'DASHBOARD')}
                 {currentUser.role === UserRole.ADMIN && navItem('Gestão', 'ADMIN', currentView === 'ADMIN')}
                 <button onClick={onLogout} className="p-2.5 bg-white/5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90"><LogOut size={16} /></button>
               </div>
@@ -97,7 +97,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, setCurrentView, cur
                 </>
             ) : (
                 <>
-                    <button onClick={() => {setCurrentView(currentUser.role === UserRole.ADMIN ? 'ADMIN' : 'DASHBOARD'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest">Painel de Controle</button>
+                    <button onClick={() => {setCurrentView('DASHBOARD'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest">Minha Conta</button>
+                    {currentUser.role === UserRole.ADMIN && (
+                      <button onClick={() => {setCurrentView('ADMIN'); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-white border-b border-white/5 tracking-widest">Gestão do Site</button>
+                    )}
                     <button onClick={() => {onLogout(); setIsMenuOpen(false);}} className="p-4 text-left text-[9px] font-black uppercase text-red-500 tracking-widest">Sair da Conta</button>
                 </>
             )}
